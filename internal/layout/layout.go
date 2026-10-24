@@ -14,6 +14,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,7 +45,7 @@ type TemplateData struct {
 
 type Set struct {
 	layouts map[string]*template.Template
-	files   map[string]string // layout name -> file shown in errors
+	files   map[string]file // template name -> source, for locating errors
 }
 
 type file struct {
@@ -96,9 +98,7 @@ func Load(root, siteURL string) (*Set, []diag.Diagnostic) {
 		},
 	}
 	var ds []diag.Diagnostic
-	parseErr := func(f file, err error) {
-		ds = append(ds, diag.Diagnostic{Path: f.abs, Msg: fmt.Sprintf("%s: %v", f.display, err)})
-	}
+	s := &Set{layouts: map[string]*template.Template{}, files: map[string]file{}}
 	base := template.New("").Funcs(funcs)
 	var layoutNames []string
 	for rel, f := range files {
@@ -107,23 +107,24 @@ func Load(root, siteURL string) (*Set, []diag.Diagnostic) {
 			continue
 		}
 		if partial, ok := strings.CutPrefix(name, "partials/"); ok {
+			s.files[partial] = f
 			// Drop the file's final newline so the include line supplies it.
 			if _, err := base.New(partial).Parse(strings.TrimSuffix(f.text, "\n")); err != nil {
-				parseErr(f, err)
+				ds = append(ds, s.locate(err))
 			}
 		} else if !strings.Contains(name, "/") {
 			layoutNames = append(layoutNames, name)
 		}
 	}
-	s := &Set{layouts: map[string]*template.Template{}, files: map[string]string{}}
 	for _, name := range layoutNames {
 		f := files[name+".html"]
+		s.files[name] = f
 		t := template.Must(base.Clone()).New(name)
 		if _, err := t.Parse(f.text); err != nil {
-			parseErr(f, err)
+			ds = append(ds, s.locate(err))
 			continue
 		}
-		s.layouts[name], s.files[name] = t, f.display
+		s.layouts[name] = t
 	}
 	diag.Sort(ds)
 	return s, ds
@@ -134,10 +135,32 @@ func (s *Set) Has(name string) bool {
 	return ok
 }
 
-// Execute runs the named layout. Errors name the layout's file.
-func (s *Set) Execute(w io.Writer, name string, data TemplateData) error {
+// Execute runs the named layout. A failure is located in the layout or
+// partial that caused it.
+func (s *Set) Execute(w io.Writer, name string, data TemplateData) []diag.Diagnostic {
 	if err := s.layouts[name].Execute(w, data); err != nil {
-		return fmt.Errorf("%s: %w", s.files[name], err)
+		return []diag.Diagnostic{s.locate(err)}
 	}
 	return nil
+}
+
+var templateErrRE = regexp.MustCompile(`(?s)^(?:html/)?template: ?([^:]+):(\d+):(?:(\d+):)? (.*)$`)
+
+// locate turns a template error such as "template: post:3:7: msg" or
+// "html/template:post:3:7: msg" into a diagnostic at that file position.
+func (s *Set) locate(err error) diag.Diagnostic {
+	m := templateErrRE.FindStringSubmatch(err.Error())
+	if m == nil {
+		return diag.Diagnostic{Msg: err.Error()}
+	}
+	f, ok := s.files[m[1]]
+	if !ok {
+		return diag.Diagnostic{Msg: err.Error()}
+	}
+	if f.abs == "" {
+		return diag.Diagnostic{Msg: fmt.Sprintf("%s:%s: %s", f.display, m[2], m[4])}
+	}
+	line, _ := strconv.Atoi(m[2])
+	col, _ := strconv.Atoi(m[3])
+	return diag.Diagnostic{Path: f.abs, Line: line, Col: col, Msg: m[4]}
 }

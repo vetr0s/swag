@@ -232,6 +232,26 @@ func TestDiagnostics(t *testing.T) {
 			},
 		},
 		{
+			name:  "layout parse errors point into the layout",
+			files: map[string]string{"layouts/note.html": "<html>\n{{if}}\n"},
+			want:  []string{`layouts/note.html:2: missing value for if`},
+		},
+		{
+			name:  "layout execution errors point into the partial",
+			files: map[string]string{"layouts/partials/footer.html": "<footer>\n{{.Page.Nope}}\n</footer>\n"},
+			want: []string{
+				`layouts/partials/footer.html:2:7: executing "footer" at <.Page.Nope>: can't evaluate field Nope in type *content.Page (building content/about.md)`,
+				`layouts/partials/footer.html:2:7: executing "footer" at <.Page.Nope>: can't evaluate field Nope in type *content.Page (building content/index.md)`,
+				`layouts/partials/footer.html:2:7: executing "footer" at <.Page.Nope>: can't evaluate field Nope in type *content.Page (building content/posts/first.md)`,
+				`layouts/partials/footer.html:2:7: executing "footer" at <.Page.Nope>: can't evaluate field Nope in type *content.Page (building content/posts/second.html)`,
+			},
+		},
+		{
+			name:  "missing partial",
+			files: map[string]string{"layouts/note.html": "<html>\n{{template \"nav\" .}}\n"},
+			want:  []string{`layouts/note.html:2:11: no such template "nav" (building content/about.md)`},
+		},
+		{
 			name:  "missing layout",
 			files: map[string]string{"content/x.html": "---\ntitle: X\nlayout: wide\n---\n"},
 			want:  []string{`content/x.html: layout "wide" not found in layouts/ or the embedded defaults`},

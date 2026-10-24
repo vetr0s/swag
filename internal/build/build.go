@@ -180,8 +180,11 @@ func Generate(dir string, o Options) (Stats, []diag.Diagnostic) {
 	}
 	for _, p := range pages {
 		var buf bytes.Buffer
-		if err := layouts.Execute(&buf, p.Layout, layout.TemplateData{Site: s, Page: p}); err != nil {
-			ds = append(ds, diag.Errorf(o.source(p), 0, "%v", err))
+		if lds := layouts.Execute(&buf, p.Layout, layout.TemplateData{Site: s, Page: p}); lds != nil {
+			for _, d := range lds {
+				d.Msg += " (building " + o.rel(o.source(p)) + ")"
+				ds = append(ds, d)
+			}
 			continue
 		}
 		write(p.Out, append(bytes.TrimRight(buf.Bytes(), "\n"), '\n'))
