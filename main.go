@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"swag/internal/cli"
+	"github.com/vetr0s/swag/internal/cli"
 )
 
 // version is set for releases with -ldflags "-X main.version=...".

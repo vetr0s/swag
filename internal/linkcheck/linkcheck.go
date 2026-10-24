@@ -14,7 +14,7 @@ import (
 	"slices"
 	"strings"
 
-	"swag/internal/site"
+	"github.com/vetr0s/swag/internal/site"
 )
 
 type Broken struct {

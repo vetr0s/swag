@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"swag/internal/diag"
-	"swag/internal/frontmatter"
-	"swag/internal/site"
+	"github.com/vetr0s/swag/internal/diag"
+	"github.com/vetr0s/swag/internal/frontmatter"
+	"github.com/vetr0s/swag/internal/site"
 )
 
 type Page struct {

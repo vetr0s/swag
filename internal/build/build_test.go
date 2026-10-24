@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"swag/internal/config"
-	"swag/internal/diag"
+	"github.com/vetr0s/swag/internal/config"
+	"github.com/vetr0s/swag/internal/diag"
 )
 
 var update = flag.Bool("update", false, "rewrite the expected/ trees of the fixture sites")

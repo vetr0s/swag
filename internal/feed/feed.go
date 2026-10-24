@@ -7,7 +7,7 @@ import (
 	"encoding/xml"
 	"time"
 
-	"swag/internal/content"
+	"github.com/vetr0s/swag/internal/content"
 )
 
 type rss struct {

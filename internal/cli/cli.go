@@ -18,12 +18,12 @@ import (
 	"syscall"
 	"time"
 
-	"swag/internal/build"
-	"swag/internal/config"
-	"swag/internal/diag"
-	"swag/internal/scaffold"
-	"swag/internal/serve"
-	"swag/internal/site"
+	"github.com/vetr0s/swag/internal/build"
+	"github.com/vetr0s/swag/internal/config"
+	"github.com/vetr0s/swag/internal/diag"
+	"github.com/vetr0s/swag/internal/scaffold"
+	"github.com/vetr0s/swag/internal/serve"
+	"github.com/vetr0s/swag/internal/site"
 )
 
 const (

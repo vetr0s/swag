@@ -13,14 +13,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"swag/internal/config"
-	"swag/internal/content"
-	"swag/internal/diag"
-	"swag/internal/feed"
-	"swag/internal/layout"
-	"swag/internal/linkcheck"
-	"swag/internal/render"
-	"swag/internal/site"
+	"github.com/vetr0s/swag/internal/config"
+	"github.com/vetr0s/swag/internal/content"
+	"github.com/vetr0s/swag/internal/diag"
+	"github.com/vetr0s/swag/internal/feed"
+	"github.com/vetr0s/swag/internal/layout"
+	"github.com/vetr0s/swag/internal/linkcheck"
+	"github.com/vetr0s/swag/internal/render"
+	"github.com/vetr0s/swag/internal/site"
 )
 
 type Options struct {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"swag/internal/content"
+	"github.com/vetr0s/swag/internal/content"
 )
 
 func TestRSS(t *testing.T) {

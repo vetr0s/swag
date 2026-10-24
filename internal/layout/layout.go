@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"swag/internal/content"
-	"swag/internal/diag"
-	"swag/internal/site"
+	"github.com/vetr0s/swag/internal/content"
+	"github.com/vetr0s/swag/internal/diag"
+	"github.com/vetr0s/swag/internal/site"
 )
 
 //go:embed defaults

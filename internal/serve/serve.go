@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"swag/internal/build"
-	"swag/internal/config"
-	"swag/internal/diag"
-	"swag/internal/render"
-	"swag/internal/site"
+	"github.com/vetr0s/swag/internal/build"
+	"github.com/vetr0s/swag/internal/config"
+	"github.com/vetr0s/swag/internal/diag"
+	"github.com/vetr0s/swag/internal/render"
+	"github.com/vetr0s/swag/internal/site"
 )
 
 type Options struct {

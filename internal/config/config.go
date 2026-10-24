@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"swag/internal/diag"
+	"github.com/vetr0s/swag/internal/diag"
 )
 
 type Config struct {

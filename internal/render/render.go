@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"swag/internal/diag"
+	"github.com/vetr0s/swag/internal/diag"
 )
 
 type Job struct {

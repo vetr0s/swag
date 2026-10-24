@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"swag/internal/diag"
+	"github.com/vetr0s/swag/internal/diag"
 )
 
 type FrontMatter struct {
