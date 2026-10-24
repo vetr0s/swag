@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="{{.Site.Language}}">
+<head>
+{{template "head" .}}
+</head>
+<body>
+<header><a href="/">{{.Site.Title}}</a></header>
+<main>
+<article>
+<h1>{{.Page.Title}}</h1>
+<p><time datetime="{{date "2006-01-02" .Page.Date}}">{{date "January 2, 2006" .Page.Date}}</time></p>
+{{.Page.Content}}
+</article>
+</main>
+{{template "footer" .}}
+</body>
+</html>

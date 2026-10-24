@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="{{.Site.Language}}">
+<head>
+{{template "head" .}}
+</head>
+<body>
+<main>
+<h1>{{.Page.Title}}</h1>
+{{- with .Page.Content}}
+{{.}}
+{{- end}}
+{{- if .Site.Posts}}
+<ul>
+{{- range .Site.Posts}}
+<li><time datetime="{{date "2006-01-02" .Date}}">{{date "2006-01-02" .Date}}</time> <a href="{{.URL}}">{{.Title}}</a></li>
+{{- end}}
+</ul>
+{{- end}}
+</main>
+{{template "footer" .}}
+</body>
+</html>

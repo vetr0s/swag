@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Example</title>
+    <link>https://example.com/</link>
+    <description>A test site.</description>
+    <language>en</language>
+    <lastBuildDate>Wed, 04 Mar 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.com/rss.xml" rel="self" type="application/rss+xml"></atom:link>
+    <item>
+      <title>Escaping &lt;tags&gt; &amp; &#34;quotes&#34;</title>
+      <link>https://example.com/posts/second.html</link>
+      <guid isPermaLink="true">https://example.com/posts/second.html</guid>
+      <pubDate>Wed, 04 Mar 2026 00:00:00 +0000</pubDate>
+      <description>&lt;p&gt;Passed through &lt;em&gt;as is&lt;/em&gt;. Code: &lt;code&gt;&amp;lt;a href=&#34;/missing.html&#34;&amp;gt;&lt;/code&gt;&lt;/p&gt;&#xA;&lt;script&gt;var s = &#39;&lt;a href=&#34;/also-missing.html&#34;&gt;&#39;;&lt;/script&gt;</description>
+    </item>
+    <item>
+      <title>Go: a tour</title>
+      <link>https://example.com/posts/first.html</link>
+      <guid isPermaLink="true">https://example.com/posts/first.html</guid>
+      <pubDate>Fri, 02 Jan 2026 00:00:00 +0000</pubDate>
+      <description>&lt;p&gt;A picture: &lt;img src=&#34;pic.png&#34; alt=&#34;pic&#34;&gt;.&lt;/p&gt;&#xA;&lt;p&gt;Back to &lt;a href=&#34;../about.html&#34;&gt;about&lt;/a&gt; and &lt;a href=&#34;https://example.com/posts/second.html&#34;&gt;second&lt;/a&gt;.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

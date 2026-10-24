@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="{{.Site.Language}}">
+<head>
+{{template "head" .}}
+</head>
+<body>
+<header><a href="/">{{.Site.Title}}</a></header>
+<main>
+<h1>{{.Page.Title}}</h1>
+{{.Page.Content}}
+</main>
+{{template "footer" .}}
+</body>
+</html>

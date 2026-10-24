@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="{{.Site.Language}}">
+<head>
+{{template "head" .}}
+</head>
+<body>
+<h1>{{.Page.Title}}</h1>
+{{.Page.Content}}
+<p>Canonical: {{absURL .Page.URL}}</p>
+{{template "footer" .}}
+</body>
+</html>
