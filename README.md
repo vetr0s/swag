@@ -107,15 +107,18 @@ The body starts here.
 | `description` | no | `<meta name="description">` |
 | `layout` | no | Selects `layouts/<name>.html` |
 | `draft` | no | `true` leaves the file out unless you pass `--drafts` |
-| `updated` | no | `YYYY-MM-DD` and an optional note. Repeat it once per edit |
+| `updated` | no | `YYYY-MM-DD`, an optional `HH:MM` and an optional note. Repeat it once per edit |
 
 `updated` is the one key that may repeat. The default post layout lists every
 edit under the publish date, newest first:
 
 ```
 updated: 2026-10-23 Rewritten for the switch to swag.
-updated: 2026-11-02 Added the neovim plugin.
+updated: 2026-11-02 18:05 Added the neovim plugin.
 ```
+
+Add the time when an edit falls on the same day as the post, so the page
+does not show the same date twice. Layouts see it as `.HasTime`.
 
 Any other key is passed to layouts as `.Page.Params.<key>`.
 
@@ -157,7 +160,7 @@ Each layout receives `.Site` and `.Page`:
 ```
 .Site.Title  .Site.URL  .Site.Author  .Site.Description  .Site.Language
 .Site.Params  .Site.Posts (newest first)  .Site.HasFeed
-.Page.Title  .Page.Date  .Page.Updated (newest)  .Page.Updates (newest first; .Date and .Note)  .Page.Description  .Page.URL  .Page.Source
+.Page.Title  .Page.Date  .Page.Updated (newest)  .Page.Updates (newest first; .Date .Note .HasTime)  .Page.Description  .Page.URL  .Page.Source
 .Page.Content  .Page.IsPost  .Page.IsDraft  .Page.Layout  .Page.Params
 ```
 

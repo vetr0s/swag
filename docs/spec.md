@@ -280,7 +280,7 @@ Known keys:
 | `description` | no | string | `<meta name="description">`, RSS fallback |
 | `layout` | no | layout name without `.html` | Selects `layouts/<name>.html` |
 | `draft` | no | `true` or `false` exactly | `true` excludes the file unless `--drafts` |
-| `updated` | no | `YYYY-MM-DD`, then an optional note after a space; not before `date` | One edit. May repeat. Listed newest first under the date by the default `post` layout; the newest is the sitemap `lastmod` |
+| `updated` | no | `YYYY-MM-DD`, then an optional `HH:MM`, then an optional note; not before `date` | One edit. May repeat. Listed newest first under the date by the default `post` layout; the newest is the sitemap `lastmod` |
 
 All other keys are passed through untouched in `.Page.Params` (string to
 string). Unknown keys are never an error, so new fields like `series:` need
@@ -288,7 +288,9 @@ no code changes. Known keys also appear in `.Page.Params` with their raw
 string values.
 
 Dates are calendar dates with no time zone. Internally they're a `time.Time`
-at 00:00 UTC.
+at 00:00 UTC. An `updated` line may add a wall-clock `HH:MM`, also stored as
+UTC with no zone conversion. A token that looks like `HH:MM` but is out of
+range is an error rather than the start of the note.
 
 ### 5.5 Drafts
 
@@ -438,7 +440,7 @@ type Page struct {
     Title       string
     Date        time.Time     // zero when unset
     Updated     time.Time     // newest of Updates; zero when there are none
-    Updates     []Update      // one per updated line, newest first; Update{Date time.Time; Note string}
+    Updates     []Update      // one per updated line, newest first; Update{Date time.Time; Note string; HasTime bool}
     Description string
     URL         string        // root-relative, e.g. "/posts/foo.html"
     Source      string        // e.g. "content/posts/foo.md"

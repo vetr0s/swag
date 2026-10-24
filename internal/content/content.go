@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -37,11 +38,14 @@ type Page struct {
 	Body []byte // source body after the front matter, before rendering
 }
 
-// Update is one `updated: YYYY-MM-DD note` line of front matter.
+// Update is one `updated: YYYY-MM-DD [HH:MM] [note]` line of front matter.
 type Update struct {
-	Date time.Time
-	Note string // what the edit changed; "" when unset
+	Date    time.Time // wall-clock time, stored as UTC like every swag date
+	Note    string    // what the edit changed; "" when unset
+	HasTime bool      // the line gave HH:MM; otherwise Date is midnight
 }
+
+var clockRE = regexp.MustCompile(`^\d\d:\d\d$`)
 
 // Discover walks root/content and returns its pages and its asset paths
 // (relative to content/). Drafts are dropped unless drafts is set.
@@ -147,14 +151,23 @@ func Load(abs, rel string, src []byte) (*Page, []diag.Diagnostic) {
 	}
 	for _, v := range fm.Repeated["updated"] {
 		d, note, _ := strings.Cut(v.Text, " ")
+		note = strings.TrimSpace(note)
 		t, err := time.Parse("2006-01-02", d)
-		switch {
-		case err != nil:
-			ds = append(ds, diag.Errorf(abs, v.Line, "invalid updated date %q: use updated: YYYY-MM-DD and an optional note", d))
-		case t.Before(p.Date):
+		if err != nil {
+			ds = append(ds, diag.Errorf(abs, v.Line, "invalid updated date %q: use updated: YYYY-MM-DD, an optional HH:MM and an optional note", d))
+		}
+		u := Update{Date: t, Note: note}
+		if clock, rest, _ := strings.Cut(note, " "); clockRE.MatchString(clock) && err == nil {
+			at, cerr := time.Parse("2006-01-02 15:04", d+" "+clock)
+			if cerr != nil {
+				ds = append(ds, diag.Errorf(abs, v.Line, "invalid updated time %q: use HH:MM, 00:00 to 23:59", clock))
+			}
+			u = Update{Date: at, Note: strings.TrimSpace(rest), HasTime: true}
+		}
+		if err == nil && t.Before(p.Date) {
 			ds = append(ds, diag.Errorf(abs, v.Line, "updated date %s is before date %s", d, f["date"]))
 		}
-		p.Updates = append(p.Updates, Update{Date: t, Note: strings.TrimSpace(note)})
+		p.Updates = append(p.Updates, u)
 	}
 	slices.SortStableFunc(p.Updates, func(a, b Update) int { return b.Date.Compare(a.Date) })
 	if len(p.Updates) > 0 {
