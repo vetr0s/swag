@@ -54,7 +54,7 @@ func TestRSS(t *testing.T) {
 
 func TestSitemap(t *testing.T) {
 	pages := []*content.Page{
-		{URL: "/posts/b.html", Date: time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC)},
+		{URL: "/posts/b.html", Date: time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC), Updated: time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC)},
 		{URL: "/"},
 		{URL: "/a b&c.html"},
 	}
@@ -69,7 +69,7 @@ func TestSitemap(t *testing.T) {
   </url>
   <url>
     <loc>https://example.com/posts/b.html</loc>
-    <lastmod>2026-03-04</lastmod>
+    <lastmod>2026-05-06</lastmod>
   </url>
 </urlset>
 `

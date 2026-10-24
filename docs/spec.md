@@ -279,9 +279,11 @@ Known keys:
 | `description` | no | string | `<meta name="description">`, RSS fallback |
 | `layout` | no | layout name without `.html` | Selects `layouts/<name>.html` |
 | `draft` | no | `true` or `false` exactly | `true` excludes the file unless `--drafts` |
+| `updated` | no | `YYYY-MM-DD`, not before `date` | Shown under the date by the default `post` layout; sitemap `lastmod` |
+| `update_note` | no | string; needs `updated` | What the update changed, shown after the updated date |
 
 All other keys are passed through untouched in `.Page.Params` (string to
-string). Unknown keys are never an error, so new fields like `updated:` need
+string). Unknown keys are never an error, so new fields like `series:` need
 no code changes. Known keys also appear in `.Page.Params` with their raw
 string values.
 
@@ -435,6 +437,8 @@ type Site struct {
 type Page struct {
     Title       string
     Date        time.Time     // zero when unset
+    Updated     time.Time     // zero when unset
+    UpdateNote  string
     Description string
     URL         string        // root-relative, e.g. "/posts/foo.html"
     Source      string        // e.g. "content/posts/foo.md"
@@ -507,7 +511,8 @@ ascending. The same order is used everywhere (home page, RSS).
   sitemaps.org 0.9 format, through `encoding/xml` like the feed.
 - One `<url>` per page and post, including the generated home page, sorted
   by URL. `<loc>` is `site.url` plus the percent-encoded page URL.
-- `<lastmod>` is the `date` front matter value when set, else omitted.
+- `<lastmod>` is the `updated` front matter value, else `date`, else
+  omitted.
   Nothing comes from the clock or file mod times.
 - Static and asset `.html` files are not listed.
 

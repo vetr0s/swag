@@ -84,14 +84,19 @@ type sitemapURL struct {
 	LastMod string `xml:"lastmod,omitempty"`
 }
 
-// Sitemap lists pages in URL order, with their date as lastmod when set.
+// Sitemap lists pages in URL order, with their updated date or else their
+// date as lastmod.
 func Sitemap(siteURL string, pages []*content.Page) []byte {
 	pages = slices.SortedFunc(slices.Values(pages), func(a, b *content.Page) int { return strings.Compare(a.URL, b.URL) })
 	var s urlset
 	for _, p := range pages {
 		u := sitemapURL{Loc: siteURL + (&url.URL{Path: p.URL}).EscapedPath()}
-		if !p.Date.IsZero() {
-			u.LastMod = p.Date.Format("2006-01-02")
+		d := p.Date
+		if !p.Updated.IsZero() {
+			d = p.Updated
+		}
+		if !d.IsZero() {
+			u.LastMod = d.Format("2006-01-02")
 		}
 		s.URLs = append(s.URLs, u)
 	}

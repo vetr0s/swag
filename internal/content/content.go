@@ -21,6 +21,8 @@ import (
 type Page struct {
 	Title       string
 	Date        time.Time // zero when unset
+	Updated     time.Time // zero when unset
+	UpdateNote  string    // what the update changed; "" when unset
 	Description string
 	URL         string // root-relative, e.g. "/posts/foo.html"
 	Source      string // e.g. "content/posts/foo.md"
@@ -128,14 +130,28 @@ func Load(abs, rel string, src []byte) (*Page, []diag.Diagnostic) {
 	if p.Title == "" {
 		ds = append(ds, diag.Errorf(abs, cmp.Or(fm.Lines["title"], 1), "missing title"))
 	}
-	if d, ok := f["date"]; ok {
-		t, err := time.Parse("2006-01-02", d)
+	day := func(key, name string) time.Time {
+		t, err := time.Parse("2006-01-02", f[key])
 		if err != nil {
-			ds = append(ds, diag.Errorf(abs, fm.Lines["date"], "invalid date %q: use YYYY-MM-DD", d))
+			ds = append(ds, diag.Errorf(abs, fm.Lines[key], "invalid %s %q: use YYYY-MM-DD", name, f[key]))
 		}
-		p.Date = t
+		return t
+	}
+	if _, ok := f["date"]; ok {
+		p.Date = day("date", "date")
 	} else if p.IsPost {
 		ds = append(ds, diag.Errorf(abs, 1, "missing date: posts need date: YYYY-MM-DD"))
+	}
+	_, hasUpdated := f["updated"]
+	if hasUpdated {
+		p.Updated = day("updated", "updated date")
+	}
+	if !p.Updated.IsZero() && p.Updated.Before(p.Date) {
+		ds = append(ds, diag.Errorf(abs, fm.Lines["updated"], "updated date %s is before date %s", f["updated"], f["date"]))
+	}
+	p.UpdateNote = f["update_note"]
+	if p.UpdateNote != "" && !hasUpdated {
+		ds = append(ds, diag.Errorf(abs, fm.Lines["update_note"], "update_note needs updated: YYYY-MM-DD"))
 	}
 	switch f["draft"] {
 	case "", "false":

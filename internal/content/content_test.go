@@ -42,12 +42,13 @@ func TestClassify(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	p, ds := Load("/s/content/posts/x.md", "posts/x.md", []byte("---\ntitle: X\ndate: 2026-02-03\nupdated: soon\n---\nbody"))
+	p, ds := Load("/s/content/posts/x.md", "posts/x.md", []byte("---\ntitle: X\ndate: 2026-02-03\nupdated: 2026-03-04\nupdate_note: Fixed a typo.\nseries: go\n---\nbody"))
 	if len(ds) != 0 {
 		t.Fatal(ds)
 	}
 	if !p.IsPost || p.Layout != "post" || p.Source != "content/posts/x.md" || p.URL != "/posts/x.html" ||
-		!p.Date.Equal(time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC)) || p.Params["updated"] != "soon" || p.Params["title"] != "X" {
+		!p.Date.Equal(time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC)) || !p.Updated.Equal(time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC)) || p.UpdateNote != "Fixed a typo." ||
+		p.Params["series"] != "go" || p.Params["title"] != "X" {
 		t.Errorf("Load: %+v", p)
 	}
 	layouts := map[string]string{"index.md": "index", "about.md": "default", "notes/index.md": "default"}
@@ -69,6 +70,9 @@ func TestLoad(t *testing.T) {
 		{"a.md", "---\ntitle: T\ndate: 2026-1-2\n---\n", "invalid date"},
 		{"a.md", "---\ntitle: T\ndate: 2026-01-02T10:00\n---\n", "invalid date"},
 		{"a.md", "---\ntitle: T\ndraft: yes\n---\n", "invalid draft"},
+		{"a.md", "---\ntitle: T\nupdated: soon\n---\n", "invalid updated date"},
+		{"a.md", "---\ntitle: T\ndate: 2026-02-03\nupdated: 2026-02-02\n---\n", "is before date"},
+		{"a.md", "---\ntitle: T\nupdate_note: x\n---\n", "update_note needs updated"},
 	}
 	for _, tt := range errs {
 		p, ds := Load("/x", tt.rel, []byte(tt.src))
