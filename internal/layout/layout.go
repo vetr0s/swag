@@ -12,9 +12,11 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -101,7 +103,8 @@ func Load(root, siteURL string) (*Set, []diag.Diagnostic) {
 	s := &Set{layouts: map[string]*template.Template{}, files: map[string]file{}}
 	base := template.New("").Funcs(funcs)
 	var layoutNames []string
-	for rel, f := range files {
+	for _, rel := range slices.Sorted(maps.Keys(files)) {
+		f := files[rel]
 		name, ok := strings.CutSuffix(rel, ".html")
 		if !ok || strings.Count(name, "/") > 1 {
 			continue

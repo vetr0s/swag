@@ -30,13 +30,13 @@ import (
 )
 
 type Options struct {
-	Root    string
-	Drafts  bool
-	Addr    string // host:port
-	Verbose bool
-	Quiet   bool
-	Stderr  io.Writer
-	Report  func([]diag.Diagnostic) // prints diagnostics
+	Root   string
+	Drafts bool
+	Addr   string    // host:port
+	Log    io.Writer // receives the written-file list and renderer stderr; nil for none
+	Quiet  bool
+	Stderr io.Writer
+	Report func([]diag.Diagnostic) // prints diagnostics
 }
 
 type Server struct {
@@ -62,20 +62,24 @@ func Run(ctx context.Context, o Options) error {
 	}
 	defer os.RemoveAll(tmp)
 	s := &Server{o: o, tmp: tmp, cache: render.NewCache()}
-	s.rebuild()
+	// The baseline comes first so an edit made during the first build still triggers a rebuild.
+	last, pending := Fingerprint(o.Root), false
+	s.rebuild(ctx)
 	srv := &http.Server{Handler: s}
-	go srv.Serve(ln)
+	served := make(chan error, 1)
+	go func() { served <- srv.Serve(ln) }()
 	fmt.Fprintf(o.Stderr, "swag: serving http://%s (Ctrl-C to stop)\n", ln.Addr())
 
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()
-	last, pending := Fingerprint(o.Root), false
 	for {
 		select {
 		case <-ctx.Done():
 			shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			return srv.Shutdown(shutdown)
+		case err := <-served:
+			return err
 		case <-tick.C:
 		}
 		// Rebuild once the tree has stopped changing for one tick, so an
@@ -85,12 +89,12 @@ func Run(ctx context.Context, o Options) error {
 			last, pending = fp, true
 		} else if pending {
 			pending = false
-			s.rebuild()
+			s.rebuild(ctx)
 		}
 	}
 }
 
-func (s *Server) rebuild() {
+func (s *Server) rebuild(ctx context.Context) {
 	start := time.Now()
 	cfg, ds := config.Load(s.o.Root)
 	if diag.HasErrors(ds) {
@@ -102,19 +106,19 @@ func (s *Server) rebuild() {
 		s.o.Report([]diag.Diagnostic{diag.Errorf("", 0, "%v", err)})
 		return
 	}
-	var log io.Writer
-	if s.o.Verbose {
-		log = s.o.Stderr
-	}
-	stats, bds := build.Generate(dir, build.Options{
+	stats, bds := build.Generate(ctx, dir, build.Options{
 		Root:         s.o.Root,
 		Config:       cfg,
 		Out:          filepath.Join(s.o.Root, cfg.Out),
 		Drafts:       s.o.Drafts,
-		Log:          log,
+		Log:          s.o.Log,
 		Cache:        s.cache,
 		LinkWarnings: true,
 	})
+	if ctx.Err() != nil {
+		os.RemoveAll(dir)
+		return
+	}
 	ds = append(ds, bds...)
 	s.o.Report(ds)
 	if diag.HasErrors(ds) {
@@ -131,8 +135,7 @@ func (s *Server) rebuild() {
 		os.RemoveAll(old)
 	}
 	if !s.o.Quiet {
-		fmt.Fprintf(s.o.Stderr, "swag: built %d pages, %d posts, %d files in %v\n",
-			stats.Pages, stats.Posts, stats.Files, time.Since(start).Round(time.Millisecond))
+		fmt.Fprintf(s.o.Stderr, "swag: built %v in %v\n", stats, time.Since(start).Round(time.Millisecond))
 	}
 }
 
@@ -193,23 +196,20 @@ func Inject(doc []byte, n int) []byte {
 	}
 }
 
-// Fingerprint summarises the path, size and mod time of every source file.
+// Fingerprint summarises the path, size and mod time of every file a build reads.
 func Fingerprint(root string) string {
 	h := sha256.New()
+	files := []string{"swag.conf"}
 	for _, d := range []string{"content", "static", "layouts"} {
-		filepath.WalkDir(filepath.Join(root, d), func(p string, e fs.DirEntry, err error) error {
-			// Directory mod times change when editors create swap files, so only files count.
-			if err != nil || e.IsDir() || site.Ignored(e.Name(), true) {
-				return nil
-			}
-			if info, err := e.Info(); err == nil {
-				fmt.Fprintf(h, "%s\x00%d\x00%d\n", p, info.Size(), info.ModTime().UnixNano())
-			}
-			return nil
-		})
+		rels, _ := site.Walk(filepath.Join(root, d), d == "static")
+		for _, rel := range rels {
+			files = append(files, path.Join(d, rel))
+		}
 	}
-	if info, err := os.Stat(filepath.Join(root, "swag.conf")); err == nil {
-		fmt.Fprintf(h, "swag.conf\x00%d\x00%d\n", info.Size(), info.ModTime().UnixNano())
+	for _, f := range files {
+		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(f))); err == nil {
+			fmt.Fprintf(h, "%s\x00%d\x00%d\n", f, info.Size(), info.ModTime().UnixNano())
+		}
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }

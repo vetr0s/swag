@@ -14,6 +14,7 @@ func TestLinks(t *testing.T) {
 <code>&lt;a href="/escaped.html"&gt;</code>
 <script src="/app.js">var s = '<a href="/in-script.html">';</SCRIPT>
 <style>a[href="/in-style.html"] {}</style>
+<script>var s = "</scripts>"; var t = '<a href="/after-prefix.html">';</script>
 <p data-href="/not-href.html">text with a stray < sign</p><a href=/last.html>`
 	got := Links(doc)
 	want := []string{"/s.css", "/a.html?x=1&y=2", "b.png", "c d.html", "/app.js", "/last.html"}

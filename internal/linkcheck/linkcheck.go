@@ -134,7 +134,9 @@ func closeTag(doc string, i int, tag string) int {
 			return len(doc)
 		}
 		i += m
-		if end := i + 2 + len(tag); end <= len(doc) && strings.EqualFold(doc[i+2:end], tag) {
+		// The tag name must end the match, so </scripts does not close <script>.
+		end := i + 2 + len(tag)
+		if end <= len(doc) && strings.EqualFold(doc[i+2:end], tag) && (end == len(doc) || isSpace(doc[end]) || doc[end] == '/' || doc[end] == '>') {
 			return i
 		}
 		i += 2
@@ -158,9 +160,13 @@ func Target(page, link, siteURL string) (target string, ok bool) {
 		return "", false
 	}
 	if m := schemeRE.FindStringSubmatch(link); m != nil {
-		rest, internal := strings.CutPrefix(link, siteURL)
 		scheme := strings.ToLower(m[1])
-		if siteURL == "" || !internal || scheme != "http" && scheme != "https" || rest != "" && !strings.ContainsRune("/?#", rune(rest[0])) {
+		rest, internal := strings.CutPrefix(link, siteURL)
+		if siteURL == "" || !internal || scheme != "http" && scheme != "https" {
+			return "", false
+		}
+		// https://example.com.evil shares the prefix but is another host.
+		if rest != "" && !strings.ContainsRune("/?#", rune(rest[0])) {
 			return "", false
 		}
 		link = "/" + strings.TrimPrefix(rest, "/")

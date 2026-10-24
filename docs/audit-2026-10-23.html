@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>swag audit</title>
+<style>
+/* ============================================================
+   Standard HTML house style for plans, audits, and design docs.
+   Deliberately project-agnostic: this never adopts a project's theme.
+   Plain document on a plain background. Legibility over decoration.
+   ============================================================ */
+
+:root {
+  --bg:        #fbfbf9;
+  --fg:        #1a1a1a;
+  --fg-muted:  #5c5c5c;
+  --rule:      #d4d4cf;
+  --surface:   #f0f0ec;
+  --link:      #0b4fa8;
+  --visited:   #6b3fa0;
+  --accent:    #8a5a00;
+  --good:      #1c6b2e;
+  --bad:       #a11b1b;
+  --measure:   72em;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:       #101010;
+    --fg:       #e6e6e3;
+    --fg-muted: #9a9a95;
+    --rule:     #3a3a3a;
+    --surface:  #1c1c1c;
+    --link:     #89a6ff;
+    --visited:  #d98cff;
+    --accent:   #e0a33a;
+    --good:     #52c96a;
+    --bad:      #ff6b52;
+  }
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 2.5rem 1.25rem 6rem;
+}
+
+/* Left-justified, not centered: the document hugs the left gutter and simply
+   stops at the measure. */
+main, .doc {
+  max-width: var(--measure);
+  margin: 0;
+}
+
+/* --- headings ------------------------------------------------ */
+
+h1, h2, h3, h4 {
+  line-height: 1.25;
+  font-weight: 600;
+  margin: 2.2em 0 0.6em;
+}
+h1 {
+  font-size: 1.9rem;
+  margin-top: 0;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--rule);
+}
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.1rem; }
+h4 { font-size: 1rem; color: var(--fg-muted); }
+
+/* Byline directly under the h1: date, repo, commit, author. */
+.meta {
+  color: var(--fg-muted);
+  font-size: 0.875rem;
+  margin: -0.2em 0 2.5em;
+}
+.meta > * + *::before { content: " · "; }
+
+/* --- prose --------------------------------------------------- */
+
+p, ul, ol, dl, table, pre, blockquote { margin: 0 0 1.1em; }
+
+a          { color: var(--link); }
+a:visited  { color: var(--visited); }
+
+strong { font-weight: 600; }
+
+small, .muted { color: var(--fg-muted); font-size: 0.875rem; }
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2.5em 0;
+}
+
+blockquote {
+  margin-left: 0;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 3px solid var(--rule);
+  color: var(--fg-muted);
+}
+
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.25em 0; }
+li > ul, li > ol { margin: 0.25em 0; }
+
+/* --- code ---------------------------------------------------- */
+
+code, kbd, samp, .path {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em;
+}
+
+code {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+}
+
+/* File paths and identifiers: mono, but no box. */
+.path { color: var(--fg-muted); }
+
+pre {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  padding: 0.75em 0.9em;
+  overflow-x: auto;
+  line-height: 1.45;
+}
+pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.8125rem;
+}
+
+/* --- tables -------------------------------------------------- */
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9375rem;
+}
+th, td {
+  border: 1px solid var(--rule);
+  padding: 0.45em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+/* Wide tables scroll inside their own box; the page never scrolls sideways. */
+.scroll { overflow-x: auto; margin: 0 0 1.1em; }
+.scroll table { margin: 0; }
+
+/* --- callouts ------------------------------------------------ */
+
+.note, .warn, .ok {
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--fg-muted);
+  background: var(--surface);
+  padding: 0.7em 0.9em;
+  margin: 0 0 1.1em;
+}
+.note > :last-child, .warn > :last-child, .ok > :last-child { margin-bottom: 0; }
+.warn { border-left-color: var(--accent); }
+.ok   { border-left-color: var(--good); }
+
+.note-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.3em;
+}
+
+/* --- status tags --------------------------------------------- */
+
+.tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0.05em 0.4em;
+  white-space: nowrap;
+  color: var(--fg-muted);
+}
+.tag-good { color: var(--good); }
+.tag-warn { color: var(--accent); }
+.tag-bad  { color: var(--bad); }
+
+/* --- task lists ---------------------------------------------- */
+
+/* <ul class="tasks"> with <li data-state="done|wip|todo"> */
+ul.tasks { list-style: none; padding-left: 0; }
+ul.tasks li {
+  padding-left: 1.9em;
+  position: relative;
+  margin: 0.4em 0;
+}
+ul.tasks li::before {
+  position: absolute;
+  left: 0;
+  font-family: ui-monospace, Menlo, monospace;
+  color: var(--fg-muted);
+  content: "[ ]";
+}
+ul.tasks li[data-state="done"]::before { content: "[x]"; color: var(--good); }
+ul.tasks li[data-state="wip"]::before  { content: "[~]"; color: var(--accent); }
+ul.tasks li[data-state="done"] { color: var(--fg-muted); }
+
+/* --- definition list (decisions, key/value facts) ------------- */
+
+dl { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 0.4em 1.2em; }
+dt { font-weight: 600; }
+dd { margin: 0; }
+
+/* --- table of contents --------------------------------------- */
+
+/* <nav class="toc"> wrapping a nested <ol> or <ul> of in-page links. */
+.toc {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  padding: 0.9em 1.1em;
+  margin: 0 0 2.2em;
+}
+.toc ol, .toc ul { list-style: none; padding-left: 0; margin: 0; }
+.toc li { margin: 0.15em 0; }
+.toc ol ol, .toc ul ul { padding-left: 1.1em; }
+.toc ol ol li, .toc ul ul li { font-size: 0.9375rem; }
+.toc a { text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+
+/* A long flat contents list reads better in columns once there is room. */
+@media (min-width: 52rem) {
+  .toc > ol, .toc > ul { columns: 2; column-gap: 2.5em; }
+  .toc > ol > li, .toc > ul > li { break-inside: avoid; }
+}
+
+/* Back-to-contents link at the foot of a section. */
+.backtotoc { font-size: 0.8125rem; color: var(--fg-muted); }
+
+/* --- footnotes / source trail -------------------------------- */
+
+.footer {
+  margin-top: 4rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  color: var(--fg-muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 34rem) {
+  body { font-size: 16px; padding: 1.5rem 1rem 4rem; }
+  dl { grid-template-columns: 1fr; gap: 0.15em; }
+  dd { margin-bottom: 0.6em; }
+}
+
+@media print {
+  :root { --bg: #fff; --fg: #000; }
+  body { font-size: 11pt; }
+  a { color: #000; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<h1>swag audit</h1>
+<p class="meta"><span>2026-10-23</span><span>vetr0s/swag @ bc910b7</span><span>Audit</span></p>
+
+<p>swag is small, tested, and mostly well-shaped. Every package passes <code>go test</code> and <code>go test -race</code>, and the pipeline matches the spec. One class of bug is serious enough to fix before anything else. The check that protects the output directory compares paths as plain text. On macOS that lets <code>swag build --out Content</code> delete the real <span class="path">content/</span> directory, and the same check lets <code>--out .git</code> or <code>--out swag.conf</code> destroy those. All three were reproduced. The fix is to compare resolved, case-folded paths, and to refuse to replace anything that is not an earlier swag output.</p>
+
+<h2>Scope</h2>
+<p>Audited: all 13 packages under <span class="path">internal/</span>, <span class="path">main.go</span>, the tests, the fixture sites, <span class="path">go.mod</span>, and README.md as the spec. Excluded: the generated golden trees under <span class="path">testdata/sites/*/expected/</span>. Windows behaviour was not run. Performance was not measured beyond the 130 ms build already observed on vetr0s.dev.</p>
+
+<h2>What's solid</h2>
+<ul>
+  <li>The standard library is the only dependency, and <code>go list -m all</code> prints one line. <code>go vet</code> and <code>gofmt</code> are clean. The race detector finds nothing.</li>
+  <li>A failed build never touches the existing output. Every error, including a broken link, returns before the swap. The failure-safety test covers six failure kinds.</li>
+  <li>The render worker pool writes results by job index, so parallelism never changes the output. <code>WaitDelay</code> keeps a stray grandchild from stalling a timeout.</li>
+  <li>The front matter, config and tokenizer parsers follow §4 and §5.4 closely, and their table tests cover BOM, CRLF and the first-colon split.</li>
+  <li><code>Generate</code> is 155 lines, but it is a straight run of the §10 phases. Splitting it would add a state struct and buy nothing.</li>
+  <li>Diagnostics point at real files and lines, including template errors inside layouts and partials.</li>
+</ul>
+
+<h2>Findings</h2>
+<p>Ordered by consequence. "Reproduced" means the behaviour was run against a scratch copy of a fixture site, not just read.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>#</th><th>Severity</th><th>Where</th><th>Problem and cost</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><span class="tag tag-bad">data loss</span></td><td><span class="path">internal/site/site.go:43</span></td><td><code>CheckOut</code> compares paths byte for byte. On a case-insensitive volume, <code>--out Content</code> passes, and <code>build.go:56</code> runs <code>RemoveAll</code> on the real sources. Reproduced. The existing test at <span class="path">site_test.go:45</span> uses a fake <code>/site</code> root and cannot catch it.</td></tr>
+<tr><td>2</td><td><span class="tag tag-bad">data loss</span></td><td><span class="path">internal/site/site.go:37</span></td><td>No symlink in the root or the output path is resolved. With <code>public -&gt; content</code>, <code>--out public/site</code> writes into <span class="path">content/</span>. A pre-existing <span class="path">content/site</span> would be deleted. Reproduced.</td></tr>
+<tr><td>3</td><td><span class="tag tag-bad">data loss</span></td><td><span class="path">internal/site/site.go:37</span></td><td>Any path inside the root is accepted. <code>--out .git</code> wiped the repository and <code>--out swag.conf</code> replaced the config with a directory. Reproduced. §10.1 allows this, so the spec has the gap too.</td></tr>
+<tr><td>4</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/build/build.go:53</span></td><td>The swap is <code>RemoveAll</code> then <code>Rename</code>. If <code>Rename</code> fails, the old output is gone and the deferred cleanup removes the new one, which leaves no output at all. <code>swag build</code> also installs no signal handler, so Ctrl-C leaves <span class="path">.swag-build-*</span> in the root.</td></tr>
+<tr><td>5</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/build/build.go:110</span></td><td>Collision detection is case-sensitive. <code>static/Style.css</code> silently overwrote <code>content/style.css</code> and the build exited 0. Reproduced. On Linux the same site produces two files.</td></tr>
+<tr><td>6</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/layout/layout.go:104</span></td><td>Partials are parsed in map order. When two partials define the same template name, the winner changes per build. Twelve identical builds produced two different outputs, 8 to 4. Reproduced. This breaks the determinism promise in §10.2.</td></tr>
+<tr><td>7</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/cli/cli.go:65</span></td><td>The CLI breaks its own contract in three ways, all reproduced. <code>swag -h</code> prints "flag: help requested" and exits 2, so the help cases at <span class="path">cli.go:97</span> are dead. <code>swag build extra</code> ignores the extra argument and exits 0. <code>swag -C nosuchdir build</code> quietly builds the enclosing site.</td></tr>
+<tr><td>8</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/serve/serve.go:72</span></td><td>The watcher takes its baseline fingerprint after the first build, not before it. An edit saved during that first build is never rebuilt until another file changes.</td></tr>
+<tr><td>9</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/render/render.go:96</span></td><td>The serve cache stores only HTML. A cache hit drops the "produced no output" warning and renderer stderr. The key also leaves out <code>SWAG_SOURCE</code> and <code>SWAG_DRAFTS</code>, so a renderer script that reads them gets stale output in serve.</td></tr>
+<tr><td>10</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/linkcheck/linkcheck.go:107</span></td><td>An attribute with an unterminated quote ends the scan for the whole page. Every link after it goes unchecked, silently.</td></tr>
+<tr><td>11</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/render/render.go:121</span></td><td><code>ctx.Err()</code> is tested before checking whether the command succeeded. A renderer that exits cleanly right at the deadline is reported as timed out.</td></tr>
+<tr><td>12</td><td><span class="tag tag-warn">defect</span></td><td><span class="path">internal/scaffold/scaffold.go:18</span></td><td><code>Slug</code> lowercases before filtering, so <code>İstanbul</code> becomes <code>istanbul</code>. Reproduced. §12.4 says non-ASCII characters are separators.</td></tr>
+<tr><td>13</td><td><span class="tag tag-warn">test gap</span></td><td><span class="path">internal/serve/serve.go:93</span></td><td>The core serve promise has no test. That covers keeping the last good build, counting only good builds, and removing the old directory. Serve coverage is 46 percent. <span class="path">internal/layout</span> has no test file of its own.</td></tr>
+<tr><td>14</td><td><span class="tag tag-warn">drag</span></td><td>several</td><td>Small copies have drifted.<ul><li><code>Fingerprint</code> at <span class="path">serve.go:197</span> has its own walk with different dot-file rules from <code>site.Walk</code>.</li><li><code>render.extOf</code> repeats <code>content.Ext</code>.</li><li>The summary line format is written twice, at <span class="path">cli.go:215</span> and <span class="path">serve.go:134</span>.</li><li><code>o.abs(o.display(x))</code> round-trips a path at four sites in <span class="path">build.go</span>.</li><li><code>frontmatter.BodyLine</code> is computed and never read.</li></ul></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Nits, not worth rows:</p>
+<ul>
+  <li>The rss.xml collision message names the output twice.</li>
+  <li><code>srv.Serve</code>'s error is dropped.</li>
+  <li>A failed write in <code>swag new</code> leaves an empty file behind.</li>
+  <li>A BOM in swag.conf is not stripped.</li>
+  <li><code>closeTag</code> matches <code>&lt;/scripts</code>.</li>
+  <li>An empty <code>site.language</code> produces an empty RSS element.</li>
+  <li><span class="path">site.go:60</span> has a three-line comment.</li>
+  <li>The <span class="path">linkcheck.go:163</span> condition mixes <code>||</code> and <code>&amp;&amp;</code> across five clauses.</li>
+  <li><span class="path">go.mod</span> pins <code>go 1.27.3</code>. The code needs about 1.25, so older toolchains are forced to download.</li>
+</ul>
+
+<h2>Documentation drift</h2>
+<p>The repo is public now, and README.md is still the working spec. Its top says it is temporary and it has no install instructions. Inside the spec, these statements no longer match the code:</p>
+<ul>
+  <li>§14 says the module path is TBD and shows <code>cli.Run(os.Args[1:], ...)</code>. The module is <code>github.com/vetr0s/swag</code>, and <span class="path">main.go:13</span> passes the version first.</li>
+  <li>§19 still lists the license and module path as open. Both are decided.</li>
+  <li>§2 asks CI or a test to check <code>go list -m all</code>. <span class="path">main_test.go</span> checks for <code>require</code> lines instead, and there is no CI.</li>
+  <li>§12.5 says local builds report the VCS revision. Go now stamps a pseudo-version, which is what <code>swag version</code> prints.</li>
+  <li>§11 says only a trailing slash resolves to <span class="path">index.html</span>. The checker also accepts <code>/notes</code> when <span class="path">notes/index.html</span> exists.</li>
+  <li>§12.2 does not say <code>--out</code> is relative to the site root, or that the summary prints a cwd-relative path.</li>
+  <li>§5.4 promises the body's line number is used to offset renderer errors. Nothing uses it.</li>
+  <li>§14 puts passthrough rendering in <span class="path">render</span>. It lives in <span class="path">build</span>, and that is the cheaper place.</li>
+  <li>The sample config in §4.1 names "Nick Tebbs".</li>
+</ul>
+
+<h2>Recommended order of work</h2>
+<ul class="tasks">
+  <li data-state="todo">Make <code>CheckOut</code> safe: resolve symlinks and compare case-insensitively. Refuse an existing output path unless it is a directory holding an <span class="path">index.html</span>, which every swag build writes. Test it on real temp directories.</li>
+  <li data-state="todo">Make the swap recoverable: rename the old output aside, rename the new one in, then delete the old one. Clean up the temp directory on SIGINT and SIGTERM in <code>swag build</code>.</li>
+  <li data-state="todo">Restore determinism. Parse partials in sorted order and compare collision keys case-folded.</li>
+  <li data-state="todo">Fix the CLI contract. Handle <code>-h</code>, reject extra arguments with exit 2, and require the <code>-C</code> directory to exist.</li>
+  <li data-state="todo">Fix serve: take the baseline before the first build, cache whole render results keyed on source and drafts too, and test <code>rebuild</code> directly.</li>
+  <li data-state="todo">Fix the smaller defects: the linkcheck quote scan, timeout ordering, and the slug.</li>
+  <li data-state="todo">Remove the drifted copies and the dead <code>BodyLine</code>. Add layout tests.</li>
+  <li data-state="todo">Resolve the documentation drift as part of the README work.</li>
+</ul>
+
+<p class="footer">Built from four parallel read-only reviews and direct reproduction. Commands run: <code>go test -count=1 ./...</code>, <code>go test -race ./...</code>, <code>go vet ./...</code>, and scratch builds of <span class="path">testdata/sites/htmlonly</span> exercising findings 1, 2, 3, 5, 6, 7 and 12.</p>
+
+</main>
+</body>
+</html>

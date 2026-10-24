@@ -33,34 +33,68 @@ func FindRoot(start string) (string, error) {
 }
 
 // CheckOut resolves out against root and refuses any directory whose
-// replacement could destroy the site or its sources.
+// replacement could destroy the site or its sources. Paths are compared after
+// resolving symlinks and folding case, because macOS volumes ignore case.
 func CheckOut(root, out string) (string, error) {
 	abs := out
 	if !filepath.IsAbs(out) {
 		abs = filepath.Join(root, out)
 	}
 	abs = filepath.Clean(abs)
-	if !within(root, abs) || abs == root {
+	real, realRoot := resolve(abs), resolve(root)
+	if !within(realRoot, real) || within(real, realRoot) {
 		return "", fmt.Errorf("unsafe output directory %q: it must be a subdirectory of the site root %s", out, root)
 	}
 	for _, src := range []string{"content", "static", "layouts"} {
-		srcAbs := filepath.Join(root, src)
-		if within(srcAbs, abs) || within(abs, srcAbs) {
+		srcReal := resolve(filepath.Join(root, src))
+		if within(srcReal, real) || within(real, srcReal) {
 			return "", fmt.Errorf("unsafe output directory %q: it overlaps %s/", out, src)
 		}
+	}
+	info, err := os.Lstat(abs)
+	if errors.Is(err, fs.ErrNotExist) {
+		return abs, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("unsafe output directory %q: it exists and is not a directory", out)
+	}
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(filepath.Join(abs, "index.html")); err != nil && len(entries) > 0 {
+		return "", fmt.Errorf("unsafe output directory %q: it is not empty and has no index.html, so it is not earlier swag output", out)
 	}
 	return abs, nil
 }
 
-// within reports whether path is dir or lies inside it.
+// resolve follows symlinks in the longest existing prefix of p.
+func resolve(p string) string {
+	rest := ""
+	for {
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Join(real, rest)
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return filepath.Join(p, rest)
+		}
+		rest = filepath.Join(filepath.Base(p), rest)
+		p = parent
+	}
+}
+
+// within reports whether path is dir or lies inside it, ignoring case.
 func within(dir, path string) bool {
-	rel, err := filepath.Rel(dir, path)
+	rel, err := filepath.Rel(strings.ToLower(dir), strings.ToLower(path))
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// Walk returns the slash-separated paths of the non-directories under dir,
-// sorted, skipping editor junk. Dot-named entries are skipped unless keepDot.
-// A missing dir yields no files.
+// Walk returns the sorted, slash-separated non-directories under dir, or none
+// when dir is missing. Editor junk is skipped, and dot-named entries unless keepDot.
 func Walk(dir string, keepDot bool) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {

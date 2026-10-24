@@ -13,10 +13,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/vetr0s/swag/internal/content"
 	"github.com/vetr0s/swag/internal/diag"
 )
 
@@ -39,47 +41,46 @@ type Options struct {
 	Cache   *Cache // nil disables caching
 }
 
-// Cache holds renderer output in memory, keyed by argv and body.
+// Cache holds successful results in memory, keyed by everything a renderer sees.
 type Cache struct {
 	mu sync.Mutex
-	m  map[[32]byte][]byte
+	m  map[[32]byte]Result
 }
 
-func NewCache() *Cache { return &Cache{m: map[[32]byte][]byte{}} }
+func NewCache() *Cache { return &Cache{m: map[[32]byte]Result{}} }
 
-func (c *Cache) get(k [32]byte) ([]byte, bool) {
+func (c *Cache) get(k [32]byte) (Result, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	v, ok := c.m[k]
 	return v, ok
 }
 
-func (c *Cache) put(k [32]byte, v []byte) {
+func (c *Cache) put(k [32]byte, v Result) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.m[k] = v
 }
 
-func key(argv []string, body []byte) [32]byte {
+func key(j Job, drafts string) [32]byte {
 	h := sha256.New()
-	for _, a := range argv {
+	for _, a := range append(slices.Clip(j.Argv), "", j.Source, drafts) {
 		h.Write([]byte(a))
 		h.Write([]byte{0})
 	}
-	h.Write([]byte{0})
-	h.Write(body)
+	h.Write(j.Body)
 	return [32]byte(h.Sum(nil))
 }
 
 // Run renders every job on runtime.NumCPU() workers.
-func Run(jobs []Job, opts Options) []Result {
+func Run(ctx context.Context, jobs []Job, opts Options) []Result {
 	results := make([]Result, len(jobs))
 	idx := make(chan int)
 	var wg sync.WaitGroup
 	for range min(runtime.NumCPU(), len(jobs)) {
 		wg.Go(func() {
 			for i := range idx {
-				results[i] = one(jobs[i], opts)
+				results[i] = one(ctx, jobs[i], opts)
 			}
 		})
 	}
@@ -91,23 +92,23 @@ func Run(jobs []Job, opts Options) []Result {
 	return results
 }
 
-func one(j Job, opts Options) Result {
-	k := key(j.Argv, j.Body)
-	if opts.Cache != nil {
-		if html, ok := opts.Cache.get(k); ok {
-			return Result{HTML: html}
-		}
-	}
-	path := filepath.Join(opts.Root, filepath.FromSlash(j.Source))
-	ctx, cancel := context.WithTimeout(context.Background(), opts.Timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, j.Argv[0], j.Argv[1:]...)
-	cmd.Dir = opts.Root
-	cmd.WaitDelay = time.Second // a stray grandchild holding stdout must not outlive the timeout
+func one(parent context.Context, j Job, opts Options) Result {
 	drafts := "0"
 	if opts.Drafts {
 		drafts = "1"
 	}
+	k := key(j, drafts)
+	if opts.Cache != nil {
+		if r, ok := opts.Cache.get(k); ok {
+			return r
+		}
+	}
+	path := filepath.Join(opts.Root, filepath.FromSlash(j.Source))
+	ctx, cancel := context.WithTimeout(parent, opts.Timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, j.Argv[0], j.Argv[1:]...)
+	cmd.Dir = opts.Root
+	cmd.WaitDelay = time.Second // a stray grandchild holding stdout must not outlive the timeout
 	cmd.Env = append(os.Environ(), "SWAG_ROOT="+opts.Root, "SWAG_SOURCE="+j.Source, "SWAG_DRAFTS="+drafts)
 	cmd.Stdin = bytes.NewReader(j.Body)
 	var stdout, stderr bytes.Buffer
@@ -116,13 +117,16 @@ func one(j Job, opts Options) Result {
 	name := filepath.Base(j.Argv[0])
 	var exitErr *exec.ExitError
 	switch {
+	case err == nil:
 	case errors.Is(err, exec.ErrNotFound):
-		return fail(path, "render failed: %s not found on PATH; install it or change render.%s in swag.conf", name, extOf(j.Source))
+		return fail(path, "render failed: %s not found on PATH; install it or change render.%s in swag.conf", name, content.Ext(j.Source))
+	case parent.Err() != nil:
+		return fail(path, "render failed (%s interrupted)", name)
 	case ctx.Err() != nil:
 		return fail(path, "render failed (%s timed out after %v)%s", name, opts.Timeout, firstLines(stderr.Bytes()))
 	case errors.As(err, &exitErr):
 		return fail(path, "render failed (%s exited %d)%s", name, exitErr.ExitCode(), firstLines(stderr.Bytes()))
-	case err != nil:
+	default:
 		return fail(path, "render failed: %v", err)
 	}
 	r := Result{HTML: stdout.Bytes(), Stderr: stderr.Bytes()}
@@ -130,17 +134,13 @@ func one(j Job, opts Options) Result {
 		r.Diags = []diag.Diagnostic{diag.Warnf(path, 0, "%s produced no output", name)}
 	}
 	if opts.Cache != nil {
-		opts.Cache.put(k, r.HTML)
+		opts.Cache.put(k, r)
 	}
 	return r
 }
 
 func fail(path, format string, args ...any) Result {
 	return Result{Diags: []diag.Diagnostic{diag.Errorf(path, 0, format, args...)}}
-}
-
-func extOf(source string) string {
-	return strings.ToLower(strings.TrimPrefix(filepath.Ext(source), "."))
 }
 
 // firstLines returns up to five lines of stderr as ": line1 / line2".

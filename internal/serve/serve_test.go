@@ -1,6 +1,8 @@
 package serve
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vetr0s/swag/internal/diag"
 )
 
 func TestInject(t *testing.T) {
@@ -82,6 +86,8 @@ func TestFingerprint(t *testing.T) {
 
 	os.WriteFile(filepath.Join(root, "content", ".a.md.swp"), []byte("swap"), 0o644)
 	os.WriteFile(filepath.Join(root, "content", "a.md~"), []byte("backup"), 0o644)
+	os.MkdirAll(filepath.Join(root, "content", ".git"), 0o755)
+	os.WriteFile(filepath.Join(root, "content", ".git", "HEAD"), []byte("x"), 0o644)
 	if Fingerprint(root) != fp {
 		t.Error("editor junk changed the fingerprint")
 	}
@@ -94,6 +100,10 @@ func TestFingerprint(t *testing.T) {
 			os.MkdirAll(filepath.Join(root, "layouts"), 0o755)
 			os.WriteFile(filepath.Join(root, "layouts", "x.html"), nil, 0o644)
 		},
+		func() {
+			os.MkdirAll(filepath.Join(root, "static"), 0o755)
+			os.WriteFile(filepath.Join(root, "static", ".nojekyll"), nil, 0o644)
+		},
 		func() { os.Remove(post) },
 	}
 	for i, step := range steps {
@@ -103,5 +113,44 @@ func TestFingerprint(t *testing.T) {
 			t.Errorf("step %d did not change the fingerprint", i)
 		}
 		fp = next
+	}
+}
+
+func TestRebuild(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "content"), 0o755)
+	os.MkdirAll(filepath.Join(root, "layouts"), 0o755)
+	os.WriteFile(filepath.Join(root, "swag.conf"), []byte("site.title = T\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "content", "index.html"), []byte("---\ntitle: Home\n---\n<p>home</p>"), 0o644)
+	layout := filepath.Join(root, "layouts", "index.html")
+	os.WriteFile(layout, []byte("{{.Page.Content}}"), 0o644)
+
+	var log bytes.Buffer
+	var reported int
+	s := &Server{o: Options{Root: root, Stderr: &log, Report: func(ds []diag.Diagnostic) { reported += len(ds) }}, tmp: t.TempDir()}
+	ctx := context.Background()
+	s.rebuild(ctx)
+	first, n := s.current()
+	if n != 1 || first == "" {
+		t.Fatalf("first build: dir %q, build %d, log %s", first, n, &log)
+	}
+
+	os.WriteFile(layout, []byte("{{.Page.Content"), 0o644)
+	s.rebuild(ctx)
+	if dir, n := s.current(); dir != first || n != 1 || reported == 0 || !strings.Contains(log.String(), "last good build") {
+		t.Errorf("broken build replaced the good one: dir %q, build %d, reported %d", dir, n, reported)
+	}
+
+	os.WriteFile(layout, []byte("<main>{{.Page.Content}}</main>"), 0o644)
+	s.rebuild(ctx)
+	dir, n := s.current()
+	if n != 2 || dir == first {
+		t.Errorf("fixed build: dir %q, build %d", dir, n)
+	}
+	if _, err := os.Stat(first); !os.IsNotExist(err) {
+		t.Errorf("old build dir was not removed: %v", err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "index.html")); string(data) != "<main><p>home</p></main>\n" {
+		t.Errorf("index.html = %q", data)
 	}
 }

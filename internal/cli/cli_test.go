@@ -16,6 +16,8 @@ func run(t *testing.T, args ...string) (int, string, string) {
 }
 
 func TestDispatch(t *testing.T) {
+	site := t.TempDir()
+	os.WriteFile(filepath.Join(site, "swag.conf"), nil, 0o644)
 	tests := []struct {
 		args   []string
 		code   int
@@ -31,6 +33,12 @@ func TestDispatch(t *testing.T) {
 		{[]string{"build", "-h"}, exitOK, ""},
 		{[]string{"new"}, exitUsage, ""},
 		{[]string{"-C", t.TempDir(), "build"}, exitUsage, ""}, // no site root
+		{[]string{"-C", filepath.Join(site, "missing"), "build"}, exitUsage, ""},
+		{[]string{"-h"}, exitOK, ""},
+		{[]string{"--help"}, exitOK, ""},
+		{[]string{"-C", site, "build", "extra"}, exitUsage, ""},
+		{[]string{"-C", site, "serve", "extra"}, exitUsage, ""},
+		{[]string{"version", "extra"}, exitUsage, ""},
 	}
 	for _, tt := range tests {
 		code, stdout, _ := run(t, tt.args...)

@@ -56,7 +56,7 @@ func Parse(path string, data []byte, defaultTitle string) (*Config, []diag.Diagn
 	}
 	var ds []diag.Diagnostic
 	seen := map[string]bool{}
-	for i, line := range strings.Split(string(data), "\n") {
+	for i, line := range strings.Split(strings.TrimPrefix(string(data), "\ufeff"), "\n") {
 		n := i + 1
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {

@@ -15,7 +15,10 @@ import (
 func Slug(title string) (string, error) {
 	var b strings.Builder
 	dash := false
-	for _, r := range strings.ToLower(title) {
+	for _, r := range title {
+		if r >= 'A' && r <= 'Z' {
+			r += 'a' - 'A' // strings.ToLower would also map İ and the Kelvin sign to ASCII
+		}
 		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
 			if dash && b.Len() > 0 {
 				b.WriteByte('-')
@@ -63,9 +66,13 @@ func New(root string, render map[string][]string, title, ext string, page bool, 
 	if err != nil {
 		return "", err
 	}
-	if _, err := f.WriteString(front); err != nil {
-		f.Close()
+	_, err = f.WriteString(front)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(path) // a half-written draft would block the retry with "already exists"
 		return "", err
 	}
-	return path, f.Close()
+	return path, nil
 }

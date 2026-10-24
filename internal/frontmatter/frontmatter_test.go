@@ -8,18 +8,17 @@ import (
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
-		fields   map[string]string
-		body     string
-		bodyLine int
-		errs     []string // "line: message substring"
+		name   string
+		src    string
+		fields map[string]string
+		body   string
+		errs   []string // "line: message substring"
 	}{
-		{name: "basic", src: "---\ntitle: Hi\ndate: 2026-01-02\n---\n\nBody\n", fields: map[string]string{"title": "Hi", "date": "2026-01-02"}, body: "Body\n", bodyLine: 6},
-		{name: "first colon splits", src: "---\ntitle: Go: a tour\n---\nx", fields: map[string]string{"title": "Go: a tour"}, body: "x", bodyLine: 4},
-		{name: "bom crlf and trailing space", src: "\xef\xbb\xbf--- \r\ntitle:  T  \r\n---\r\n\r\nB\r\n", fields: map[string]string{"title": "T"}, body: "B\r\n", bodyLine: 5},
-		{name: "comments and blanks", src: "---\n# note\n\ntitle: T\n---\n", fields: map[string]string{"title": "T"}, body: "", bodyLine: 6},
-		{name: "only one blank line dropped", src: "---\ntitle: T\n---\n\n\nB", fields: map[string]string{"title": "T"}, body: "\nB", bodyLine: 5},
+		{name: "basic", src: "---\ntitle: Hi\ndate: 2026-01-02\n---\n\nBody\n", fields: map[string]string{"title": "Hi", "date": "2026-01-02"}, body: "Body\n"},
+		{name: "first colon splits", src: "---\ntitle: Go: a tour\n---\nx", fields: map[string]string{"title": "Go: a tour"}, body: "x"},
+		{name: "bom crlf and trailing space", src: "\xef\xbb\xbf--- \r\ntitle:  T  \r\n---\r\n\r\nB\r\n", fields: map[string]string{"title": "T"}, body: "B\r\n"},
+		{name: "comments and blanks", src: "---\n# note\n\ntitle: T\n---\n", fields: map[string]string{"title": "T"}, body: ""},
+		{name: "only one blank line dropped", src: "---\ntitle: T\n---\n\n\nB", fields: map[string]string{"title": "T"}, body: "\nB"},
 		{name: "missing", src: "title: T\n", errs: []string{"1: missing front matter"}},
 		{name: "empty file", src: "", errs: []string{"1: missing front matter"}},
 		{name: "unterminated", src: "---\ntitle: T\n", errs: []string{"1: unterminated"}},
@@ -47,8 +46,8 @@ func TestParse(t *testing.T) {
 					t.Errorf("field %s = %q, want %q", k, fm.Fields[k], v)
 				}
 			}
-			if len(fm.Fields) != len(tt.fields) || string(fm.Body) != tt.body || fm.BodyLine != tt.bodyLine {
-				t.Errorf("got fields %v body %q line %d, want %v %q %d", fm.Fields, fm.Body, fm.BodyLine, tt.fields, tt.body, tt.bodyLine)
+			if len(fm.Fields) != len(tt.fields) || string(fm.Body) != tt.body {
+				t.Errorf("got fields %v body %q, want %v %q", fm.Fields, fm.Body, tt.fields, tt.body)
 			}
 		})
 	}

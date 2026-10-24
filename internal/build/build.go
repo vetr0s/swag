@@ -7,11 +7,13 @@ package build
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html/template"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/vetr0s/swag/internal/config"
 	"github.com/vetr0s/swag/internal/content"
@@ -39,32 +41,47 @@ type Stats struct {
 	Files int // assets, static files and rss.xml
 }
 
-// Build generates the site and replaces o.Out with the result.
-func Build(o Options) (Stats, []diag.Diagnostic) {
+func (s Stats) String() string {
+	return fmt.Sprintf("%d pages, %d posts, %d files", s.Pages, s.Posts, s.Files)
+}
+
+// Build generates the site and replaces o.Out with the result. The old output
+// is renamed aside first, so a failed swap can put it back.
+func Build(ctx context.Context, o Options) (Stats, []diag.Diagnostic) {
 	tmp, err := os.MkdirTemp(o.Root, ".swag-build-*")
 	if err != nil {
 		return Stats{}, []diag.Diagnostic{diag.Errorf("", 0, "%v", err)}
 	}
 	defer os.RemoveAll(tmp)
-	stats, ds := Generate(tmp, o)
+	stats, ds := Generate(ctx, tmp, o)
 	if diag.HasErrors(ds) {
 		return stats, ds
 	}
-	for _, step := range []func() error{
-		func() error { return os.Chmod(tmp, 0o755) },
-		func() error { return os.MkdirAll(filepath.Dir(o.Out), 0o755) },
-		func() error { return os.RemoveAll(o.Out) },
-		func() error { return os.Rename(tmp, o.Out) },
-	} {
-		if err := step(); err != nil {
-			return stats, append(ds, diag.Errorf(o.Out, 0, "replacing output directory: %v", err))
-		}
+	fail := func(err error) (Stats, []diag.Diagnostic) {
+		return stats, append(ds, diag.Errorf(o.Out, 0, "replacing output directory: %v", err))
+	}
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		return fail(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(o.Out), 0o755); err != nil {
+		return fail(err)
+	}
+	old := tmp + ".old"
+	if err := os.Rename(o.Out, old); err != nil && !os.IsNotExist(err) {
+		return fail(err)
+	}
+	if err := os.Rename(tmp, o.Out); err != nil {
+		os.Rename(old, o.Out)
+		return fail(err)
+	}
+	if err := os.RemoveAll(old); err != nil {
+		ds = append(ds, diag.Warnf(old, 0, "removing the previous output: %v", err))
 	}
 	return stats, ds
 }
 
 // Generate writes the whole site into dir, which must be an empty directory.
-func Generate(dir string, o Options) (Stats, []diag.Diagnostic) {
+func Generate(ctx context.Context, dir string, o Options) (Stats, []diag.Diagnostic) {
 	cfg := o.Config
 	pages, assets, ds := content.Discover(o.Root, cfg.Render, o.Drafts)
 	staticDir := filepath.Join(o.Root, "static")
@@ -106,20 +123,26 @@ func Generate(dir string, o Options) (Stats, []diag.Diagnostic) {
 		ds = append(ds, diag.Warnf(o.abs("swag.conf"), 0, "site.url is not set, so rss.xml is not generated"))
 	}
 
-	// Map every output path to the file that produces it, to catch collisions.
+	// Map every output path to the file that produces it. Collisions compare
+	// case-folded paths, since a case-insensitive volume holds only one of them.
 	owner := map[string]string{}
+	folded := map[string]string{}
 	claim := func(out, src string) {
-		if prev, ok := owner[out]; ok {
-			ds = append(ds, diag.Errorf(src, 0, "writes %s, which %s also writes", o.display(out), o.rel(prev)))
+		if prev, ok := folded[strings.ToLower(out)]; ok {
+			by := o.rel(prev) + " also writes"
+			if prev == o.outFile(out) {
+				by = "swag also generates"
+			}
+			ds = append(ds, diag.Errorf(src, 0, "writes %s, which %s", o.display(out), by))
 			return
 		}
-		owner[out] = src
+		owner[out], folded[strings.ToLower(out)] = src, src
 	}
 	for _, p := range pages {
 		claim(p.Out, o.source(p))
 	}
 	if hasFeed {
-		claim("rss.xml", o.abs(o.display("rss.xml")))
+		claim("rss.xml", o.outFile("rss.xml"))
 	}
 	for _, a := range assets {
 		claim(a, filepath.Join(o.Root, "content", filepath.FromSlash(a)))
@@ -138,15 +161,18 @@ func Generate(dir string, o Options) (Stats, []diag.Diagnostic) {
 			continue
 		}
 		if p.Ext == "html" {
-			p.Content = template.HTML(bytes.TrimRight(p.Body, "\n"))
+			p.Content = trimmedHTML(p.Body)
 			continue
 		}
 		jobs = append(jobs, render.Job{Source: p.Source, Argv: cfg.Render[p.Ext], Body: p.Body})
 		rendered = append(rendered, p)
 	}
-	results := render.Run(jobs, render.Options{Root: o.Root, Drafts: o.Drafts, Timeout: cfg.Timeout, Cache: o.Cache})
+	results := render.Run(ctx, jobs, render.Options{Root: o.Root, Drafts: o.Drafts, Timeout: cfg.Timeout, Cache: o.Cache})
+	if ctx.Err() != nil {
+		return stats, append(ds, diag.Errorf("", 0, "build interrupted"))
+	}
 	for i, r := range results {
-		rendered[i].Content = template.HTML(bytes.TrimRight(r.HTML, "\n"))
+		rendered[i].Content = trimmedHTML(r.HTML)
 		ds = append(ds, r.Diags...)
 		if len(r.Stderr) > 0 && o.Log != nil {
 			fmt.Fprintf(o.Log, "%s: renderer stderr:\n%s", rendered[i].Source, r.Stderr)
@@ -173,7 +199,7 @@ func Generate(dir string, o Options) (Stats, []diag.Diagnostic) {
 			err = os.WriteFile(path, data, 0o644)
 		}
 		if err != nil {
-			ds = append(ds, diag.Errorf(o.abs(o.display(out)), 0, "%v", err))
+			ds = append(ds, diag.Errorf(o.outFile(out), 0, "%v", err))
 		} else if o.Log != nil {
 			fmt.Fprintf(o.Log, "wrote %s\n", o.display(out))
 		}
@@ -211,7 +237,7 @@ func Generate(dir string, o Options) (Stats, []diag.Diagnostic) {
 		return stats, append(ds, diag.Errorf("", 0, "link check: %v", err))
 	}
 	for _, b := range broken {
-		path := o.abs(o.display(b.Page))
+		path := o.outFile(b.Page)
 		if src := owner[b.Page]; src != "" {
 			path = src
 		}
@@ -220,12 +246,21 @@ func Generate(dir string, o Options) (Stats, []diag.Diagnostic) {
 	return stats, ds
 }
 
+func trimmedHTML(b []byte) template.HTML {
+	return template.HTML(bytes.TrimRight(b, "\n"))
+}
+
 // source is the absolute source path of p, or its output path when generated.
 func (o Options) source(p *content.Page) string {
 	if p.Source == "" {
-		return o.abs(o.display(p.Out))
+		return o.outFile(p.Out)
 	}
 	return o.abs(p.Source)
+}
+
+// outFile is the absolute path an output file has in the final output directory.
+func (o Options) outFile(out string) string {
+	return filepath.Join(o.Out, filepath.FromSlash(out))
 }
 
 // display names an output path as it appears under the output directory.

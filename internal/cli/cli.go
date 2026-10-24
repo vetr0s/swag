@@ -65,7 +65,10 @@ func Run(version string, args []string, stdout, stderr io.Writer) int {
 	global := flag.NewFlagSet("swag", flag.ContinueOnError)
 	global.SetOutput(io.Discard)
 	start := global.String("C", "", "")
-	if err := global.Parse(args); err != nil {
+	if err := global.Parse(args); errors.Is(err, flag.ErrHelp) {
+		fmt.Fprint(stderr, usage)
+		return exitOK
+	} else if err != nil {
 		fmt.Fprintf(stderr, "swag: %v\n%s", err, usage)
 		return exitUsage
 	}
@@ -76,6 +79,10 @@ func Run(version string, args []string, stdout, stderr io.Writer) int {
 	}
 	e := &env{stdout: stdout, stderr: stderr, cwd: cwd, start: cwd}
 	if *start != "" {
+		if info, err := os.Stat(*start); err != nil || !info.IsDir() {
+			fmt.Fprintf(stderr, "swag: -C %s: not a directory\n", *start)
+			return exitUsage
+		}
 		e.start = *start
 	}
 	args = global.Args()
@@ -92,19 +99,21 @@ func Run(version string, args []string, stdout, stderr io.Writer) int {
 	case "new":
 		return e.new(args)
 	case "version":
+		if len(args) > 0 {
+			return e.usageError("version", "unexpected argument %q", args[0])
+		}
 		fmt.Fprintln(stdout, "swag", resolveVersion(version))
 		return exitOK
-	case "help", "-h", "--help", "-help":
-		if len(args) > 0 {
-			if u, ok := usages[args[0]]; ok {
-				fmt.Fprintln(stderr, u)
-				return exitOK
-			}
-			fmt.Fprintf(stderr, "swag: unknown command %q\n%s", args[0], usage)
-			return exitUsage
+	case "help":
+		if len(args) == 0 {
+			fmt.Fprint(stderr, usage)
+			return exitOK
 		}
-		fmt.Fprint(stderr, usage)
-		return exitOK
+		if u, ok := usages[args[0]]; ok {
+			fmt.Fprintln(stderr, u)
+			return exitOK
+		}
+		cmd = args[0]
 	}
 	fmt.Fprintf(stderr, "swag: unknown command %q\n%s", cmd, usage)
 	return exitUsage
@@ -139,20 +148,26 @@ func resolveVersion(v string) string {
 	return rev
 }
 
-// flags parses a subcommand's flags. ok is false after a usage error or -h,
-// with code set to the exit code.
-func (e *env) flags(fs *flag.FlagSet, args []string) (code int, ok bool) {
+// flags parses a subcommand's flags and allows at most nargs arguments. ok is
+// false after a usage error or -h, with code set to the exit code.
+func (e *env) flags(fs *flag.FlagSet, args []string, nargs int) (code int, ok bool) {
 	fs.SetOutput(io.Discard)
 	err := fs.Parse(args)
-	if errors.Is(err, flag.ErrHelp) {
+	switch {
+	case errors.Is(err, flag.ErrHelp):
 		fmt.Fprintln(e.stderr, usages[fs.Name()])
 		return exitOK, false
-	}
-	if err != nil {
-		fmt.Fprintf(e.stderr, "swag %s: %v\nusage: %s\n", fs.Name(), err, usages[fs.Name()])
-		return exitUsage, false
+	case err != nil:
+		return e.usageError(fs.Name(), "%v", err), false
+	case fs.NArg() > nargs:
+		return e.usageError(fs.Name(), "unexpected argument %q", fs.Arg(nargs)), false
 	}
 	return 0, true
+}
+
+func (e *env) usageError(cmd, format string, args ...any) int {
+	fmt.Fprintf(e.stderr, "swag %s: %s\nusage: %s\n", cmd, fmt.Sprintf(format, args...), usages[cmd])
+	return exitUsage
 }
 
 // load finds the root and reads swag.conf. ok is false after printing errors.
@@ -180,13 +195,20 @@ func (e *env) report(ds []diag.Diagnostic) {
 	}
 }
 
+func (e *env) log(verbose bool) io.Writer {
+	if verbose {
+		return e.stderr
+	}
+	return nil
+}
+
 func (e *env) build(args []string) int {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	drafts := fs.Bool("drafts", false, "")
 	out := fs.String("out", "", "")
 	verbose := fs.Bool("v", false, "")
 	fs.BoolVar(&e.quiet, "q", false, "")
-	if code, ok := e.flags(fs, args); !ok {
+	if code, ok := e.flags(fs, args, 0); !ok {
 		return code
 	}
 	start := time.Now()
@@ -202,19 +224,17 @@ func (e *env) build(args []string) int {
 		fmt.Fprintf(e.stderr, "swag: %v\n", err)
 		return exitUsage
 	}
-	o := build.Options{Root: root, Config: cfg, Out: outAbs, Drafts: *drafts}
-	if *verbose {
-		o.Log = e.stderr
-	}
-	stats, ds := build.Build(o)
+	o := build.Options{Root: root, Config: cfg, Out: outAbs, Drafts: *drafts, Log: e.log(*verbose)}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	stats, ds := build.Build(ctx, o)
 	e.report(ds)
 	if diag.HasErrors(ds) {
 		return exitError
 	}
 	if !e.quiet {
-		fmt.Fprintf(e.stderr, "swag: built %d pages, %d posts, %d files in %v -> %s%c\n",
-			stats.Pages, stats.Posts, stats.Files, time.Since(start).Round(time.Millisecond),
-			diag.Rel(e.cwd, outAbs), filepath.Separator)
+		fmt.Fprintf(e.stderr, "swag: built %v in %v -> %s%c\n",
+			stats, time.Since(start).Round(time.Millisecond), diag.Rel(e.cwd, outAbs), filepath.Separator)
 	}
 	return exitOK
 }
@@ -226,7 +246,7 @@ func (e *env) serve(args []string) int {
 	host := fs.String("host", "127.0.0.1", "")
 	verbose := fs.Bool("v", false, "")
 	fs.BoolVar(&e.quiet, "q", false, "")
-	if code, ok := e.flags(fs, args); !ok {
+	if code, ok := e.flags(fs, args, 0); !ok {
 		return code
 	}
 	root, cfg, code, ok := e.load()
@@ -239,13 +259,13 @@ func (e *env) serve(args []string) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err := serve.Run(ctx, serve.Options{
-		Root:    root,
-		Drafts:  *drafts,
-		Addr:    net.JoinHostPort(*host, strconv.Itoa(*port)),
-		Verbose: *verbose,
-		Quiet:   e.quiet,
-		Stderr:  e.stderr,
-		Report:  e.report,
+		Root:   root,
+		Drafts: *drafts,
+		Addr:   net.JoinHostPort(*host, strconv.Itoa(*port)),
+		Log:    e.log(*verbose),
+		Quiet:  e.quiet,
+		Stderr: e.stderr,
+		Report: e.report,
 	})
 	if err != nil {
 		fmt.Fprintf(e.stderr, "swag: %v\n", err)
@@ -258,12 +278,11 @@ func (e *env) new(args []string) int {
 	fs := flag.NewFlagSet("new", flag.ContinueOnError)
 	page := fs.Bool("page", false, "")
 	ext := fs.String("ext", "md", "")
-	if code, ok := e.flags(fs, args); !ok {
+	if code, ok := e.flags(fs, args, 1); !ok {
 		return code
 	}
 	if fs.NArg() != 1 {
-		fmt.Fprintf(e.stderr, "swag new: expected one title argument\nusage: %s\n", usages["new"])
-		return exitUsage
+		return e.usageError("new", "expected one title argument")
 	}
 	root, cfg, code, ok := e.load()
 	if !ok {

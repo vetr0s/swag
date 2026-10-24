@@ -15,6 +15,8 @@ func TestSlug(t *testing.T) {
 		"café olé":         "caf-ol",
 		"__x__":            "x",
 		"Über":             "ber",
+		"İstanbul":         "stanbul",
+		"\u212a2 Kelvin":   "2-kelvin",
 	}
 	for in, want := range tests {
 		if got, err := Slug(in); err != nil || got != want {

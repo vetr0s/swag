@@ -2,6 +2,7 @@ package build
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -118,7 +119,7 @@ func TestGolden(t *testing.T) {
 			root := fixture(name)
 			o := options(t, root)
 			dir := t.TempDir()
-			_, ds := Generate(dir, o)
+			_, ds := Generate(context.Background(), dir, o)
 			if got := formatted(root, ds); !slices.Equal(got, wantDiags) {
 				t.Fatalf("diagnostics = %q, want %q", got, wantDiags)
 			}
@@ -133,7 +134,7 @@ func TestGolden(t *testing.T) {
 			diffTrees(t, readTree(t, expected), got)
 
 			again := t.TempDir()
-			Generate(again, o)
+			Generate(context.Background(), again, o)
 			diffTrees(t, got, readTree(t, again))
 		})
 	}
@@ -144,7 +145,7 @@ func TestBuildReplacesOutput(t *testing.T) {
 	o := options(t, root)
 	os.MkdirAll(filepath.Join(o.Out, "stale"), 0o755)
 	os.WriteFile(filepath.Join(o.Out, "stale", "old.html"), nil, 0o644)
-	if _, ds := Build(o); diag.HasErrors(ds) {
+	if _, ds := Build(context.Background(), o); diag.HasErrors(ds) {
 		t.Fatal(ds)
 	}
 	if _, err := os.Stat(filepath.Join(o.Out, "stale")); !os.IsNotExist(err) {
@@ -169,14 +170,14 @@ func TestFailedBuildLeavesOutput(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			root := copyFixture(t, "basic")
 			o := options(t, root)
-			if _, ds := Build(o); diag.HasErrors(ds) {
+			if _, ds := Build(context.Background(), o); diag.HasErrors(ds) {
 				t.Fatal(ds)
 			}
 			before := readTree(t, o.Out)
 			for path, body := range files {
 				os.WriteFile(filepath.Join(root, path), []byte(body), 0o644)
 			}
-			if _, ds := Build(o); !diag.HasErrors(ds) {
+			if _, ds := Build(context.Background(), o); !diag.HasErrors(ds) {
 				t.Fatal("build succeeded, want failure")
 			}
 			diffTrees(t, before, readTree(t, o.Out))
@@ -185,6 +186,21 @@ func TestFailedBuildLeavesOutput(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInterruptedBuildLeavesOutput(t *testing.T) {
+	root := copyFixture(t, "basic")
+	o := options(t, root)
+	if _, ds := Build(context.Background(), o); diag.HasErrors(ds) {
+		t.Fatal(ds)
+	}
+	before := readTree(t, o.Out)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, ds := Build(ctx, o); !slices.ContainsFunc(ds, func(d diag.Diagnostic) bool { return d.Msg == "build interrupted" }) {
+		t.Errorf("diagnostics = %v, want build interrupted", ds)
+	}
+	diffTrees(t, before, readTree(t, o.Out))
 }
 
 func TestDiagnostics(t *testing.T) {
@@ -225,10 +241,12 @@ func TestDiagnostics(t *testing.T) {
 			files: map[string]string{
 				"content/about.html": "---\ntitle: A\n---\n",
 				"static/rss.xml":     "x",
+				"static/About.html":  "x",
 			},
 			want: []string{
 				`content/about.md: writes docs/about.html, which content/about.html also writes`,
-				`static/rss.xml: writes docs/rss.xml, which docs/rss.xml also writes`,
+				`static/About.html: writes docs/About.html, which content/about.html also writes`,
+				`static/rss.xml: writes docs/rss.xml, which swag also generates`,
 			},
 		},
 		{
@@ -264,7 +282,7 @@ func TestDiagnostics(t *testing.T) {
 				os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0o755)
 				os.WriteFile(filepath.Join(root, path), []byte(body), 0o644)
 			}
-			_, ds := Generate(t.TempDir(), options(t, root))
+			_, ds := Generate(context.Background(), t.TempDir(), options(t, root))
 			if got := formatted(root, ds); !slices.Equal(got, tt.want) {
 				t.Errorf("diagnostics:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(tt.want, "\n"))
 			}
@@ -276,7 +294,7 @@ func TestRendererNotFound(t *testing.T) {
 	root := copyFixture(t, "basic")
 	o := options(t, root)
 	o.Config.Render["md"] = []string{"swag-no-such-renderer"}
-	_, ds := Generate(t.TempDir(), o)
+	_, ds := Generate(context.Background(), t.TempDir(), o)
 	if len(ds) == 0 || !strings.Contains(ds[0].Msg, "swag-no-such-renderer not found on PATH; install it or change render.md") {
 		t.Errorf("diagnostics = %v", ds)
 	}
@@ -286,7 +304,7 @@ func TestDrafts(t *testing.T) {
 	o := options(t, fixture("basic"))
 	o.Drafts = true
 	dir := t.TempDir()
-	_, ds := Generate(dir, o)
+	_, ds := Generate(context.Background(), dir, o)
 	if got := formatted(o.Root, ds); !slices.Equal(got, []string{`content/posts/draft.md: broken link "/nowhere.html"`}) {
 		t.Errorf("diagnostics = %q", got)
 	}
@@ -303,7 +321,7 @@ func TestPandoc(t *testing.T) {
 	o := options(t, fixture("basic"))
 	o.Config.Render["md"] = []string{pandoc, "--from=gfm", "--to=html5"}
 	dir := t.TempDir()
-	if _, ds := Generate(dir, o); len(ds) != 0 {
+	if _, ds := Generate(context.Background(), dir, o); len(ds) != 0 {
 		t.Fatal(ds)
 	}
 	if page := readTree(t, dir)["posts/first.html"]; !strings.Contains(page, `<img src="pic.png" alt="pic">`) {

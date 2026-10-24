@@ -11,10 +11,9 @@ import (
 )
 
 type FrontMatter struct {
-	Fields   map[string]string
-	Lines    map[string]int // line each key was set on
-	Body     []byte
-	BodyLine int // source line the body starts on
+	Fields map[string]string
+	Lines  map[string]int // line each key was set on
+	Body   []byte
 }
 
 var keyRE = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -60,10 +59,8 @@ func Parse(path string, src []byte) (*FrontMatter, []diag.Diagnostic) {
 			fm.Fields[key], fm.Lines[key] = val, n
 		}
 	}
-	fm.BodyLine = n + 1
 	if blank, after, _ := bytes.Cut(rest, []byte("\n")); len(rest) > 0 && len(bytes.TrimRight(blank, "\r")) == 0 {
 		rest = after
-		fm.BodyLine++
 	}
 	fm.Body = rest
 	return fm, ds

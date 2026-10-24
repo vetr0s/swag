@@ -98,3 +98,10 @@ func TestTokenize(t *testing.T) {
 		t.Error("unterminated quote: want error")
 	}
 }
+
+func TestParseBOM(t *testing.T) {
+	c, ds := Parse("swag.conf", []byte("\xef\xbb\xbfsite.title = T\n"), "dir")
+	if len(ds) != 0 || c.Title != "T" {
+		t.Errorf("title %q, diagnostics %v", c.Title, ds)
+	}
+}

@@ -43,13 +43,24 @@ func TestFindRoot(t *testing.T) {
 }
 
 func TestCheckOut(t *testing.T) {
-	root := "/site"
-	for _, out := range []string{"docs", "public/site", "/site/docs"} {
+	tmp, _ := filepath.EvalSymlinks(t.TempDir())
+	root := filepath.Join(tmp, "site")
+	mkdirs(t, root, "swag.conf", "content/a.md", "static", "layouts", ".git/HEAD", "docs/index.html", "empty", "notes/x.txt")
+	mkdirs(t, tmp, "outside")
+	os.Symlink(filepath.Join(root, "content"), filepath.Join(root, "public"))
+	os.Symlink(tmp, filepath.Join(root, "up"))
+	for _, out := range []string{"docs", "build/site", "empty", filepath.Join(root, "docs")} {
 		if _, err := CheckOut(root, out); err != nil {
 			t.Errorf("CheckOut(%s): %v", out, err)
 		}
 	}
-	for _, out := range []string{".", "..", "/", "/elsewhere", "../site2", "content", "content/out", "static/x", "layouts", "docs/../.."} {
+	for _, out := range []string{
+		".", "..", "/", tmp, "../outside", "docs/../..",
+		"content", "content/out", "static/x", "layouts",
+		"Content", "STATIC/x", // the same directories on a case-insensitive volume
+		"public/site", "up/outside", // symlinked parents that lead into content/ or out of the root
+		".git", "swag.conf", "notes", // existing things that are not earlier swag output
+	} {
 		if _, err := CheckOut(root, out); err == nil {
 			t.Errorf("CheckOut(%s): want error", out)
 		}

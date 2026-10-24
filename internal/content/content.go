@@ -149,7 +149,7 @@ func Load(abs, rel string, src []byte) (*Page, []diag.Diagnostic) {
 		p.Layout = f["layout"]
 	case p.IsPost:
 		p.Layout = "post"
-	case strings.TrimSuffix(rel, path.Ext(rel)) == "index":
+	case p.Out == "index.html":
 		p.Layout = "index"
 	default:
 		p.Layout = "default"
