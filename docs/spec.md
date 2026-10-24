@@ -264,7 +264,8 @@ Grammar:
   quoting, no multi-line values, no lists. (`title: Go: a tour` has the title
   `Go: a tour`.)
 - Keys are lowercase, matching `^[a-z][a-z0-9_-]*$`.
-- Duplicate keys are an error.
+- Duplicate keys are an error, except `updated`, which records one edit per
+  line.
 - Line numbers in errors refer to the real line in the source file.
 - The body is everything after the closing `---` line. One leading blank line
   is dropped. Renderer errors are reported against the file, not a body line,
@@ -279,8 +280,7 @@ Known keys:
 | `description` | no | string | `<meta name="description">`, RSS fallback |
 | `layout` | no | layout name without `.html` | Selects `layouts/<name>.html` |
 | `draft` | no | `true` or `false` exactly | `true` excludes the file unless `--drafts` |
-| `updated` | no | `YYYY-MM-DD`, not before `date` | Shown under the date by the default `post` layout; sitemap `lastmod` |
-| `update_note` | no | string; needs `updated` | What the update changed, shown after the updated date |
+| `updated` | no | `YYYY-MM-DD`, then an optional note after a space; not before `date` | One edit. May repeat. Listed newest first under the date by the default `post` layout; the newest is the sitemap `lastmod` |
 
 All other keys are passed through untouched in `.Page.Params` (string to
 string). Unknown keys are never an error, so new fields like `series:` need
@@ -437,8 +437,8 @@ type Site struct {
 type Page struct {
     Title       string
     Date        time.Time     // zero when unset
-    Updated     time.Time     // zero when unset
-    UpdateNote  string
+    Updated     time.Time     // newest of Updates; zero when there are none
+    Updates     []Update      // one per updated line, newest first; Update{Date time.Time; Note string}
     Description string
     URL         string        // root-relative, e.g. "/posts/foo.html"
     Source      string        // e.g. "content/posts/foo.md"

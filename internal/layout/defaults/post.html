@@ -9,8 +9,8 @@
 <article>
 <h1>{{.Page.Title}}</h1>
 <p><time datetime="{{date "2006-01-02" .Page.Date}}">{{date "January 2, 2006" .Page.Date}}</time></p>
-{{- if not .Page.Updated.IsZero}}
-<p>Updated <time datetime="{{date "2006-01-02" .Page.Updated}}">{{date "January 2, 2006" .Page.Updated}}</time>.{{with .Page.UpdateNote}} {{.}}{{end}}</p>
+{{- range .Page.Updates}}
+<p>Updated <time datetime="{{date "2006-01-02" .Date}}">{{date "January 2, 2006" .Date}}</time>.{{with .Note}} {{.}}{{end}}</p>
 {{- end}}
 {{.Page.Content}}
 </article>

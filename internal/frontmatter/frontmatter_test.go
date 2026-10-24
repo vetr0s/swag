@@ -1,6 +1,7 @@
 package frontmatter
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -50,5 +51,13 @@ func TestParse(t *testing.T) {
 				t.Errorf("got fields %v body %q, want %v %q", fm.Fields, fm.Body, tt.fields, tt.body)
 			}
 		})
+	}
+}
+
+func TestRepeatedUpdated(t *testing.T) {
+	fm, ds := Parse("f.md", []byte("---\nupdated: 2026-01-01 First.\ntitle: T\nupdated: 2026-02-01\n---\n"))
+	want := []Value{{"2026-01-01 First.", 2}, {"2026-02-01", 4}}
+	if len(ds) != 0 || !slices.Equal(fm.Repeated["updated"], want) || fm.Fields["updated"] != "2026-02-01" {
+		t.Errorf("Repeated = %v, Fields = %v, diagnostics %v", fm.Repeated, fm.Fields, ds)
 	}
 }

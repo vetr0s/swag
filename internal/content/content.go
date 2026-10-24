@@ -21,8 +21,8 @@ import (
 type Page struct {
 	Title       string
 	Date        time.Time // zero when unset
-	Updated     time.Time // zero when unset
-	UpdateNote  string    // what the update changed; "" when unset
+	Updated     time.Time // newest entry of Updates; zero when there are none
+	Updates     []Update  // newest first
 	Description string
 	URL         string // root-relative, e.g. "/posts/foo.html"
 	Source      string // e.g. "content/posts/foo.md"
@@ -35,6 +35,12 @@ type Page struct {
 	Out  string // output path relative to the output root, e.g. "posts/foo.html"
 	Ext  string // lowercase source extension without the dot
 	Body []byte // source body after the front matter, before rendering
+}
+
+// Update is one `updated: YYYY-MM-DD note` line of front matter.
+type Update struct {
+	Date time.Time
+	Note string // what the edit changed; "" when unset
 }
 
 // Discover walks root/content and returns its pages and its asset paths
@@ -130,28 +136,29 @@ func Load(abs, rel string, src []byte) (*Page, []diag.Diagnostic) {
 	if p.Title == "" {
 		ds = append(ds, diag.Errorf(abs, cmp.Or(fm.Lines["title"], 1), "missing title"))
 	}
-	day := func(key, name string) time.Time {
-		t, err := time.Parse("2006-01-02", f[key])
+	if d, ok := f["date"]; ok {
+		t, err := time.Parse("2006-01-02", d)
 		if err != nil {
-			ds = append(ds, diag.Errorf(abs, fm.Lines[key], "invalid %s %q: use YYYY-MM-DD", name, f[key]))
+			ds = append(ds, diag.Errorf(abs, fm.Lines["date"], "invalid date %q: use YYYY-MM-DD", d))
 		}
-		return t
-	}
-	if _, ok := f["date"]; ok {
-		p.Date = day("date", "date")
+		p.Date = t
 	} else if p.IsPost {
 		ds = append(ds, diag.Errorf(abs, 1, "missing date: posts need date: YYYY-MM-DD"))
 	}
-	_, hasUpdated := f["updated"]
-	if hasUpdated {
-		p.Updated = day("updated", "updated date")
+	for _, v := range fm.Repeated["updated"] {
+		d, note, _ := strings.Cut(v.Text, " ")
+		t, err := time.Parse("2006-01-02", d)
+		switch {
+		case err != nil:
+			ds = append(ds, diag.Errorf(abs, v.Line, "invalid updated date %q: use updated: YYYY-MM-DD and an optional note", d))
+		case t.Before(p.Date):
+			ds = append(ds, diag.Errorf(abs, v.Line, "updated date %s is before date %s", d, f["date"]))
+		}
+		p.Updates = append(p.Updates, Update{Date: t, Note: strings.TrimSpace(note)})
 	}
-	if !p.Updated.IsZero() && p.Updated.Before(p.Date) {
-		ds = append(ds, diag.Errorf(abs, fm.Lines["updated"], "updated date %s is before date %s", f["updated"], f["date"]))
-	}
-	p.UpdateNote = f["update_note"]
-	if p.UpdateNote != "" && !hasUpdated {
-		ds = append(ds, diag.Errorf(abs, fm.Lines["update_note"], "update_note needs updated: YYYY-MM-DD"))
+	slices.SortStableFunc(p.Updates, func(a, b Update) int { return b.Date.Compare(a.Date) })
+	if len(p.Updates) > 0 {
+		p.Updated = p.Updates[0].Date
 	}
 	switch f["draft"] {
 	case "", "false":

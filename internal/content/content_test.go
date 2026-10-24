@@ -1,6 +1,7 @@
 package content
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -42,12 +43,13 @@ func TestClassify(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
-	p, ds := Load("/s/content/posts/x.md", "posts/x.md", []byte("---\ntitle: X\ndate: 2026-02-03\nupdated: 2026-03-04\nupdate_note: Fixed a typo.\nseries: go\n---\nbody"))
+	p, ds := Load("/s/content/posts/x.md", "posts/x.md", []byte("---\ntitle: X\ndate: 2026-02-03\nupdated: 2026-03-04   Fixed a typo.\nupdated: 2026-05-06\nupdated: 2026-04-05 Added a section.\nseries: go\n---\nbody"))
 	if len(ds) != 0 {
 		t.Fatal(ds)
 	}
 	if !p.IsPost || p.Layout != "post" || p.Source != "content/posts/x.md" || p.URL != "/posts/x.html" ||
-		!p.Date.Equal(time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC)) || !p.Updated.Equal(time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC)) || p.UpdateNote != "Fixed a typo." ||
+		!p.Date.Equal(time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC)) || !slices.Equal(p.Updates, []Update{{day(2026, 5, 6), ""}, {day(2026, 4, 5), "Added a section."}, {day(2026, 3, 4), "Fixed a typo."}}) ||
+		!p.Updated.Equal(day(2026, 5, 6)) ||
 		p.Params["series"] != "go" || p.Params["title"] != "X" {
 		t.Errorf("Load: %+v", p)
 	}
@@ -71,8 +73,8 @@ func TestLoad(t *testing.T) {
 		{"a.md", "---\ntitle: T\ndate: 2026-01-02T10:00\n---\n", "invalid date"},
 		{"a.md", "---\ntitle: T\ndraft: yes\n---\n", "invalid draft"},
 		{"a.md", "---\ntitle: T\nupdated: soon\n---\n", "invalid updated date"},
+		{"a.md", "---\ntitle: T\nupdated: 2026/01/01 Fixed.\n---\n", "invalid updated date"},
 		{"a.md", "---\ntitle: T\ndate: 2026-02-03\nupdated: 2026-02-02\n---\n", "is before date"},
-		{"a.md", "---\ntitle: T\nupdate_note: x\n---\n", "update_note needs updated"},
 	}
 	for _, tt := range errs {
 		p, ds := Load("/x", tt.rel, []byte(tt.src))
@@ -98,3 +100,5 @@ func TestSortPosts(t *testing.T) {
 		t.Errorf("order = %v", got)
 	}
 }
+
+func day(y, m, d int) time.Time { return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC) }
