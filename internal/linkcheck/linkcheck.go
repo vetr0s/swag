@@ -1,7 +1,8 @@
 // Package linkcheck finds internal links in generated HTML that point at
-// files missing from the output tree. The stdlib has no HTML parser, so a
-// small scanner pulls href and src values out of tags, skipping comments and
-// the bodies of <script> and <style>. No network requests are ever made.
+// files missing from the output tree, or at fragments missing from the page.
+// The stdlib has no HTML parser, so a small scanner pulls href, src and id
+// values out of tags, skipping comments and the bodies of <script> and
+// <style>. No network requests are ever made.
 package linkcheck
 
 import (
@@ -32,7 +33,10 @@ func Check(dir, siteURL string) ([]Broken, error) {
 	for _, f := range files {
 		exists[f] = true
 	}
-	var broken []Broken
+	// Fragments can point at any page, so every page is scanned before any link is checked.
+	var pages []string
+	links := map[string][]string{}
+	ids := map[string]map[string]bool{}
 	for _, f := range files {
 		if !strings.HasSuffix(f, ".html") {
 			continue
@@ -41,9 +45,25 @@ func Check(dir, siteURL string) ([]Broken, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, link := range Links(string(doc)) {
-			t, ok := Target(f, link, siteURL)
-			if ok && !exists[t] && !exists[path.Join(t, "index.html")] {
+		var pageIDs []string
+		links[f], pageIDs = Scan(string(doc))
+		ids[f] = map[string]bool{}
+		for _, id := range pageIDs {
+			ids[f][id] = true
+		}
+		pages = append(pages, f)
+	}
+	var broken []Broken
+	for _, f := range pages {
+		for _, link := range links[f] {
+			t, frag, ok := Target(f, link, siteURL)
+			if !ok {
+				continue
+			}
+			if !exists[t] {
+				t = path.Join(t, "index.html")
+			}
+			if !exists[t] || !anchored(ids[t], t, frag) {
 				broken = append(broken, Broken{Page: f, Link: link})
 			}
 		}
@@ -54,20 +74,30 @@ func Check(dir, siteURL string) ([]Broken, error) {
 	return slices.Compact(broken), nil
 }
 
-// Links returns the entity-decoded href and src attribute values in doc.
-func Links(doc string) []string {
-	var links []string
+// anchored reports whether frag names an element of page t. Fragments into
+// non-HTML files and the special fragment "top" always pass, as in browsers.
+func anchored(ids map[string]bool, t, frag string) bool {
+	if frag == "" || !strings.HasSuffix(t, ".html") || strings.EqualFold(frag, "top") || ids[frag] {
+		return true
+	}
+	decoded, err := url.PathUnescape(frag)
+	return err == nil && ids[decoded]
+}
+
+// Scan returns the entity-decoded href and src values in doc, and the
+// fragment targets it defines: every id, and name on <a>.
+func Scan(doc string) (links, ids []string) {
 	i := 0
 	for {
 		lt := strings.IndexByte(doc[i:], '<')
 		if lt < 0 {
-			return links
+			return links, ids
 		}
 		i += lt + 1
 		if strings.HasPrefix(doc[i:], "!--") {
 			end := strings.Index(doc[i:], "-->")
 			if end < 0 {
-				return links
+				return links, ids
 			}
 			i += end + 3
 			continue
@@ -106,7 +136,7 @@ func Links(doc string) []string {
 			if i < len(doc) && (doc[i] == '"' || doc[i] == '\'') {
 				end := strings.IndexByte(doc[i+1:], doc[i])
 				if end < 0 {
-					return links
+					return links, ids
 				}
 				val, i = doc[i+1:i+1+end], i+end+2
 			} else {
@@ -116,8 +146,11 @@ func Links(doc string) []string {
 				}
 				val, i = doc[i:j], j
 			}
-			if name == "href" || name == "src" {
+			switch {
+			case name == "href" || name == "src":
 				links = append(links, html.UnescapeString(val))
+			case name == "id" || name == "name" && tag == "a":
+				ids = append(ids, html.UnescapeString(val))
 			}
 		}
 		if tag == "script" || tag == "style" {
@@ -154,28 +187,32 @@ func isSpace(c byte) bool {
 var schemeRE = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9+.-]*):`)
 
 // Target resolves link, found on the page at output path page, to the output
-// path it must point at. ok is false for links that are not checked.
-func Target(page, link, siteURL string) (target string, ok bool) {
-	if link == "" || strings.HasPrefix(link, "#") || strings.HasPrefix(link, "//") {
-		return "", false
+// path and fragment it must point at. ok is false for links that are not checked.
+func Target(page, link, siteURL string) (target, frag string, ok bool) {
+	if link == "" || strings.HasPrefix(link, "//") {
+		return "", "", false
 	}
 	if m := schemeRE.FindStringSubmatch(link); m != nil {
 		scheme := strings.ToLower(m[1])
 		rest, internal := strings.CutPrefix(link, siteURL)
 		if siteURL == "" || !internal || scheme != "http" && scheme != "https" {
-			return "", false
+			return "", "", false
 		}
 		// https://example.com.evil shares the prefix but is another host.
 		if rest != "" && !strings.ContainsRune("/?#", rune(rest[0])) {
-			return "", false
+			return "", "", false
 		}
 		link = "/" + strings.TrimPrefix(rest, "/")
 	}
-	if k := strings.IndexAny(link, "?#"); k >= 0 {
+	link, frag, _ = strings.Cut(link, "#")
+	if k := strings.IndexByte(link, '?'); k >= 0 {
 		link = link[:k]
 	}
+	if link == "" && frag == "" {
+		return "", "", false
+	}
 	if link == "" {
-		return "", false
+		return page, frag, true
 	}
 	if decoded, err := url.PathUnescape(link); err == nil {
 		link = decoded
@@ -187,5 +224,5 @@ func Target(page, link, siteURL string) (target string, ok bool) {
 	if strings.HasSuffix(link, "/") || t == "/" {
 		t = path.Join(t, "index.html")
 	}
-	return strings.TrimPrefix(t, "/"), true
+	return strings.TrimPrefix(t, "/"), frag, true
 }

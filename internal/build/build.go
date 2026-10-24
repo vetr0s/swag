@@ -38,7 +38,7 @@ type Options struct {
 type Stats struct {
 	Pages int // non-post HTML pages, including a generated home page
 	Posts int
-	Files int // assets, static files and rss.xml
+	Files int // assets, static files, rss.xml and sitemap.xml
 }
 
 func (s Stats) String() string {
@@ -144,6 +144,9 @@ func Generate(ctx context.Context, dir string, o Options) (Stats, []diag.Diagnos
 	if hasFeed {
 		claim("rss.xml", o.outFile("rss.xml"))
 	}
+	if cfg.URL != "" {
+		claim("sitemap.xml", o.outFile("sitemap.xml"))
+	}
 	for _, a := range assets {
 		claim(a, filepath.Join(o.Root, "content", filepath.FromSlash(a)))
 	}
@@ -217,6 +220,10 @@ func Generate(ctx context.Context, dir string, o Options) (Stats, []diag.Diagnos
 	}
 	if hasFeed {
 		write("rss.xml", feed.RSS(cfg.Title, cfg.URL, cfg.Description, cfg.Language, posts))
+		stats.Files++
+	}
+	if cfg.URL != "" {
+		write("sitemap.xml", feed.Sitemap(cfg.URL, pages))
 		stats.Files++
 	}
 	for _, out := range append(assets, statics...) {

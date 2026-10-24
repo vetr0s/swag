@@ -3,6 +3,7 @@ package scaffold
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,5 +58,31 @@ func TestNew(t *testing.T) {
 		if _, err := New(root, render, "x", ext, false, today); err == nil {
 			t.Errorf("ext %s: want error", ext)
 		}
+	}
+}
+
+func TestInit(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "my site")
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	conf, _ := os.ReadFile(filepath.Join(dir, "swag.conf"))
+	if !strings.HasPrefix(string(conf), "site.title       = my site\n") {
+		t.Errorf("swag.conf =\n%s", conf)
+	}
+	if info, err := os.Stat(filepath.Join(dir, "content")); err != nil || !info.IsDir() {
+		t.Errorf("content/: %v", err)
+	}
+	if err := Init(dir); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("second Init = %v", err)
+	}
+
+	existing := t.TempDir()
+	os.Mkdir(filepath.Join(existing, "content"), 0o755)
+	if err := Init(existing); err == nil {
+		t.Error("Init over an existing content/ succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(existing, "swag.conf")); !os.IsNotExist(err) {
+		t.Errorf("failed Init left swag.conf behind: %v", err)
 	}
 }

@@ -76,3 +76,27 @@ func New(root string, render map[string][]string, title, ext string, page bool, 
 	}
 	return path, nil
 }
+
+const conf = `site.title       = %s
+# site.url         = https://example.com
+# site.author      =
+# site.description =
+`
+
+// Init makes dir a site by creating swag.conf and content/, and creates dir
+// first if needed. It refuses when either already exists.
+func Init(dir string) error {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"swag.conf", "content"} {
+		if _, err := os.Lstat(filepath.Join(abs, name)); err == nil {
+			return fmt.Errorf("%s already exists", filepath.Join(dir, name))
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(abs, "content"), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(abs, "swag.conf"), fmt.Appendf(nil, conf, filepath.Base(abs)), 0o644)
+}

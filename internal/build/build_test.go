@@ -242,11 +242,13 @@ func TestDiagnostics(t *testing.T) {
 				"content/about.html": "---\ntitle: A\n---\n",
 				"static/rss.xml":     "x",
 				"static/About.html":  "x",
+				"static/sitemap.xml": "x",
 			},
 			want: []string{
 				`content/about.md: writes docs/about.html, which content/about.html also writes`,
 				`static/About.html: writes docs/About.html, which content/about.html also writes`,
 				`static/rss.xml: writes docs/rss.xml, which swag also generates`,
+				`static/sitemap.xml: writes docs/sitemap.xml, which swag also generates`,
 			},
 		},
 		{

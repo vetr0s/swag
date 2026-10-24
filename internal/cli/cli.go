@@ -36,6 +36,7 @@ var usages = map[string]string{
 	"build":   "swag build [--drafts] [--out <dir>] [-v] [-q]\n\nBuild the site into build.out (default docs/). --out is relative to the site root.",
 	"serve":   "swag serve [--drafts] [--port <n>] [--host <addr>] [-v] [-q]\n\nBuild into a temporary directory, serve it locally and rebuild on changes.",
 	"new":     "swag new [--page] [--ext <ext>] \"<title>\"\n\nCreate a draft post (or page) and print its path.",
+	"init":    "swag init [dir]\n\nCreate swag.conf and content/ in dir, default the current directory, and print its path.",
 	"version": "swag version\n\nPrint the swag version.",
 	"help":    "swag help [command]\n\nShow help for swag or for one command.",
 }
@@ -46,6 +47,7 @@ commands:
   build     build the site into build.out
   serve     preview the site locally with live reload
   new       create a new post or page
+  init      create a new site
   version   print the version
   help      show help for a command
 
@@ -98,6 +100,8 @@ func Run(version string, args []string, stdout, stderr io.Writer) int {
 		return e.serve(args)
 	case "new":
 		return e.new(args)
+	case "init":
+		return e.init(args)
 	case "version":
 		if len(args) > 0 {
 			return e.usageError("version", "unexpected argument %q", args[0])
@@ -271,6 +275,26 @@ func (e *env) serve(args []string) int {
 		fmt.Fprintf(e.stderr, "swag: %v\n", err)
 		return exitError
 	}
+	return exitOK
+}
+
+func (e *env) init(args []string) int {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	if code, ok := e.flags(fs, args, 1); !ok {
+		return code
+	}
+	dir := e.start
+	if fs.NArg() == 1 {
+		dir = fs.Arg(0)
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(e.start, dir)
+		}
+	}
+	if err := scaffold.Init(dir); err != nil {
+		fmt.Fprintf(e.stderr, "swag init: %v\n", err)
+		return exitError
+	}
+	fmt.Fprintln(e.stdout, diag.Rel(e.cwd, dir))
 	return exitOK
 }
 

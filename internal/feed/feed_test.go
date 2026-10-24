@@ -51,3 +51,29 @@ func TestRSS(t *testing.T) {
 		t.Error("want two items")
 	}
 }
+
+func TestSitemap(t *testing.T) {
+	pages := []*content.Page{
+		{URL: "/posts/b.html", Date: time.Date(2026, 3, 4, 0, 0, 0, 0, time.UTC)},
+		{URL: "/"},
+		{URL: "/a b&c.html"},
+	}
+	out := string(Sitemap("https://example.com", pages))
+	want := `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://example.com/</loc>
+  </url>
+  <url>
+    <loc>https://example.com/a%20b&amp;c.html</loc>
+  </url>
+  <url>
+    <loc>https://example.com/posts/b.html</loc>
+    <lastmod>2026-03-04</lastmod>
+  </url>
+</urlset>
+`
+	if out != want {
+		t.Errorf("Sitemap:\n%s\nwant:\n%s", out, want)
+	}
+}

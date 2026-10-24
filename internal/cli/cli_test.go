@@ -73,7 +73,7 @@ func TestNewAndBuild(t *testing.T) {
 	}
 
 	code, stdout, stderr = run(t, "build", "--drafts")
-	if code != exitOK || stdout != "" || !strings.HasPrefix(stderr, "swag: built 2 pages, 1 posts, 1 files in ") ||
+	if code != exitOK || stdout != "" || !strings.HasPrefix(stderr, "swag: built 2 pages, 1 posts, 2 files in ") ||
 		!strings.HasSuffix(stderr, " -> "+filepath.FromSlash("../../docs/")+"\n") {
 		t.Errorf("build = %d %q %q", code, stdout, stderr)
 	}
@@ -93,5 +93,21 @@ func TestNewAndBuild(t *testing.T) {
 	code, _, stderr = run(t, "build", "-q")
 	if want := filepath.FromSlash("../bad.html") + ":3: invalid draft \"maybe\": use true or false\n"; code != exitError || stderr != want {
 		t.Errorf("bad front matter = %d %q, want %q", code, stderr, want)
+	}
+}
+
+func TestInitAndBuild(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if code, stdout, stderr := run(t, "init", "site"); code != exitOK || stdout != "site\n" {
+		t.Fatalf("init = %d %q %q", code, stdout, stderr)
+	}
+	if code, _, stderr := run(t, "init", "site"); code != exitError || !strings.Contains(stderr, "already exists") {
+		t.Errorf("init over a site = %d %q", code, stderr)
+	}
+	if code, _, _ := run(t, "init", "a", "b"); code != exitUsage {
+		t.Errorf("init with two dirs = %d", code)
+	}
+	if code, _, stderr := run(t, "-C", "site", "build"); code != exitOK {
+		t.Errorf("build of a new site = %d %q", code, stderr)
 	}
 }
